@@ -17,6 +17,8 @@ const companionIds = ref<string[]>([])
 const selectedIds = ref<string[]>([])
 /** filtre pull 0–1 — yazdıkça ortaya */
 const filterPulls = ref<Record<string, number>>({})
+/** konuşan / işi alan — kadroda ortaya geçer */
+const spotlightId = ref<string | null>(null)
 const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
@@ -124,20 +126,26 @@ function onBusEvent(e: BusEvent) {
       focusId.value = e.lead
       allyIds.value = helpers
       companionIds.value = companions
+      spotlightId.value = e.lead
 
       flashState(e.lead, AGENT_BY_ID.get(e.lead)?.arriveState ?? 'exclaim', 900)
-      for (const id of helpers) {
-        flashState(id, AGENT_BY_ID.get(id)?.arriveState ?? 'exclaim', 700)
+      // helper’lar sessiz gelsin — kalabalıkta herkes zıplamasın
+      if (!helpers.length) {
+        for (const id of companions) flashState(id, 'notify', 500)
       }
-      for (const id of companions) flashState(id, 'notify', 500)
       break
     }
 
     case 'agent.thinking':
       states[e.agentId] = e.state
+      // sadece gerçekten düşünen öne çıkar (orbit vs. değil)
+      if (e.state === (AGENT_BY_ID.get(e.agentId)?.thinkState ?? 'thinking')) {
+        spotlightId.value = e.agentId
+      }
       break
 
     case 'agent.say':
+      spotlightId.value = e.agentId
       push({
         from: 'agent',
         agentId: e.agentId,
@@ -147,6 +155,10 @@ function onBusEvent(e: BusEvent) {
 
     case 'agent.done':
       states[e.agentId] = AGENT_BY_ID.get(e.agentId)?.idleState ?? 'idle'
+      // konuşma bitince lead ortaya döner (varsa)
+      if (spotlightId.value === e.agentId && focusId.value) {
+        spotlightId.value = focusId.value
+      }
       break
 
     case 'agent.pair':
@@ -164,6 +176,7 @@ function onBusEvent(e: BusEvent) {
     case 'agent.handoff': {
       // sistem satırı: `ARIA → ARIS: …` (isimler örnek — herkes herkese devredebilir)
       push({ from: 'system', text: `${e.from} → ${e.to}: ${e.task}` })
+      spotlightId.value = e.to
       if (focusId.value === e.to) break
       if (!allyIds.value.includes(e.to)) {
         allyIds.value = [...allyIds.value, e.to]
@@ -276,6 +289,7 @@ onUnmounted(() => {
       :chat-engaged="chatEngaged"
       :selected-ids="selectedIds"
       :filter-pulls="filterPulls"
+      :spotlight-id="spotlightId"
     />
     <ChatDock
       :messages="messages"

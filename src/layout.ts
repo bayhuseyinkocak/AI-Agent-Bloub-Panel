@@ -31,6 +31,8 @@ export interface LayoutInput {
   selectedIds?: string[]
   /** filtre yakınlığı 0–1 (yazdıkça artar) */
   filterPulls?: Record<string, number>
+  /** konuşan / işi alan — formasyonda ortaya geçer */
+  spotlightId?: string | null
   seed?: number
 }
 
@@ -97,35 +99,35 @@ const COMPANION_RING: Array<{ x: number; y: number }> = [
   { x: 64, y: 70 }
 ]
 
-const ALLY_FLANK: Array<{ x: number; y: number }> = [
-  { x: 34, y: 42 },
-  { x: 66, y: 42 },
-  { x: 30, y: 54 },
-  { x: 70, y: 54 }
-]
-
-/** Seçili bekleyiş: merkez + chat’e doğru biraz alçak. */
-function waitSlot(index: number, count: number): Slot {
-  if (count === 1) {
-    return { x: 50, y: 62, scale: 1.7, z: 28, opacity: 1, z3d: 110 }
+/**
+ * Kadro dizilimi — index 0 ortada ve en önde (yüksek z-index).
+ * Sonrakiler sağ/sol dönüşümlü kanatlara yayılır (V formasyonu).
+ * 1: orta · 2: yan yana · 3+: V · 5+: ikinci sıra kanat
+ */
+function frontSlot(index: number, count: number): Slot {
+  if (count <= 1) {
+    return { x: 50, y: 64, scale: 1.85, z: 34, opacity: 1, z3d: 165 }
   }
   if (count === 2) {
+    // ikili — chat yanı; lead (0) net daha önde / yüksek z
     return index === 0
-      ? { x: 36, y: 58, scale: 1.48, z: 26, opacity: 1, z3d: 95 }
-      : { x: 64, y: 58, scale: 1.48, z: 26, opacity: 1, z3d: 95 }
+      ? { x: 37, y: 58, scale: 1.55, z: 32, opacity: 1, z3d: 125 }
+      : { x: 64, y: 58, scale: 1.46, z: 26, opacity: 1, z3d: 95 }
   }
-  if (count === 3) {
-    const xs = [28, 50, 72]
-    return { x: xs[index]!, y: 56, scale: 1.3, z: 24, opacity: 1, z3d: 82 }
+  if (index === 0) {
+    return { x: 50, y: 62, scale: 1.82, z: 36, opacity: 1, z3d: 170 }
   }
-  const angle = (index / count) * Math.PI * 2 - Math.PI / 2
+  // 1 sağ, 2 sol, 3 sağ-uzak, 4 sol-uzak…
+  const side = index % 2 === 1 ? 1 : -1
+  const rank = Math.ceil(index / 2)
+  const spread = 13 + (rank - 1) * 12
   return {
-    x: 50 + Math.cos(angle) * 20,
-    y: 54 + Math.sin(angle) * 10,
-    scale: 1.18,
-    z: 24,
+    x: 50 + side * spread,
+    y: 58 - (rank - 1) * 5,
+    scale: Math.max(0.95, 1.42 - (rank - 1) * 0.14),
+    z: 30 - (rank - 1) * 3,
     opacity: 1,
-    z3d: 75
+    z3d: 115 - (rank - 1) * 26
   }
 }
 
@@ -148,27 +150,57 @@ function outerBase(id: string, softPull: boolean, cornerIndex: number): Slot {
 }
 
 /**
+ * Kadro sırası: spotlight (konuşan) en öne, sonra lead, sonra helper’lar.
+ * İlk çağırılan / konuşan ortada durur.
+ */
+function orderSquad(
+  ids: string[],
+  focusId: string | null,
+  allyIds: string[],
+  spotlightId: string | null
+): string[] {
+  const inSquad = new Set<string>()
+  if (focusId) inSquad.add(focusId)
+  for (const id of allyIds) inSquad.add(id)
+  if (spotlightId) inSquad.add(spotlightId)
+
+  const base: string[] = []
+  if (focusId && inSquad.has(focusId)) base.push(focusId)
+  for (const id of allyIds) {
+    if (inSquad.has(id) && !base.includes(id)) base.push(id)
+  }
+  if (spotlightId && inSquad.has(spotlightId) && !base.includes(spotlightId)) {
+    base.push(spotlightId)
+  }
+
+  if (spotlightId && base.includes(spotlightId)) {
+    return [spotlightId, ...base.filter((id) => id !== spotlightId)]
+  }
+  return base
+}
+
+/**
  * Kademeli yaklaşım:
- * - selected → bekleme yuvası (merkez, chat’e yakın)
+ * - selected → kadro formasyonu (ilk seçili orta + yüksek z)
  * - filterPull 0–1 → köşeden merkeze doğru (yazdıkça artar)
  * - canlı modda diğerleri uzaklaşır
- * - canlı değilse focus/ally/pair klasik summon
+ * - commit: focus/ally kadro V’si, konuşan ortaya, pair istisna
  */
 export function assignSlots(input: LayoutInput): Map<string, Slot> {
   const { ids, focusId, allyIds, companionIds, pair } = input
   const selectedIds = input.selectedIds ?? []
   const filterPulls = input.filterPulls ?? {}
+  const spotlightId = input.spotlightId ?? null
   const live = selectedIds.length > 0 || Object.keys(filterPulls).length > 0
 
   const slots = new Map<string, Slot>()
   const outer: string[] = []
-  let allyI = 0
   let compI = 0
   let outerI = 0
 
-  // 1) kesin seçim — bekleme
+  // 1) kesin seçim / bekleme — ilk gelen orta
   selectedIds.forEach((id, i) => {
-    slots.set(id, waitSlot(i, selectedIds.length))
+    slots.set(id, frontSlot(i, selectedIds.length))
   })
 
   // 2) filtre yakınlığı — yazdıkça ortaya
@@ -198,9 +230,7 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
     return slots
   }
 
-  // 4) commit edilmiş summon — focus / ally / pair / companion
-  const peacetime = !focusId
-
+  // 4) commit edilmiş summon — kadro V’si (ilk + helper), pair istisna
   if (pair) {
     const base = pair.mode === 'orbit' ? PAIR_ORBIT : PAIR_SIDE
     const pairIds = [pair.a, pair.b]
@@ -212,44 +242,25 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
         x: 50 + dir * base.gap + jx * 0.4,
         y: base.y + jy * 0.3,
         scale: base.scale,
-        z: base.z,
+        z: base.z + (i === 0 ? 4 : 0),
         opacity: 1,
-        z3d: base.z3d
+        z3d: base.z3d + (i === 0 ? 20 : 0)
       })
     })
   }
+
+  // asıl kadro: lead + helper’lar (+ spotlight) — V formasyonu
+  const squad = orderSquad(ids, focusId, allyIds, spotlightId)
+  squad.forEach((id, i) => {
+    if (slots.has(id)) return
+    slots.set(id, frontSlot(i, squad.length))
+  })
 
   for (const id of ids) {
     const jx = hash01(id, 3) * 4 - 2
     const jy = hash01(id, 7) * 4 - 2
 
     if (slots.has(id)) continue
-
-    if (id === focusId) {
-      slots.set(id, {
-        x: 50 + jx * 0.3,
-        y: 68 + jy * 0.2,
-        scale: 2.15,
-        z: 30,
-        opacity: 1,
-        z3d: 160
-      })
-      continue
-    }
-
-    if (allyIds.includes(id)) {
-      const base = ALLY_FLANK[allyI % ALLY_FLANK.length]!
-      allyI++
-      slots.set(id, {
-        x: base.x + jx,
-        y: base.y + jy,
-        scale: 0.72,
-        z: 20,
-        opacity: 0.95,
-        z3d: 48
-      })
-      continue
-    }
 
     if (companionIds.includes(id)) {
       const base = COMPANION_RING[compI % COMPANION_RING.length]!
@@ -282,11 +293,13 @@ export function roleOf(
   companionIds: string[],
   pair?: PairBinding | null,
   selectedIds?: string[],
-  filterPulls?: Record<string, number>
+  filterPulls?: Record<string, number>,
+  spotlightId?: string | null
 ): Role {
   if (selectedIds?.includes(id)) return 'wait'
   if ((filterPulls?.[id] ?? 0) > 0) return 'probe'
   if (pair && (id === pair.a || id === pair.b)) return 'pair'
+  if (id === spotlightId) return 'focus'
   if (id === focusId) return 'focus'
   if (allyIds.includes(id)) return 'ally'
   if (companionIds.includes(id)) return 'companion'

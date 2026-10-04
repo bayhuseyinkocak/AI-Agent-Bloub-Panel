@@ -123,8 +123,8 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     }
     emit({ type: 'agent.called', lead, helpers })
 
-    // lead + ilk helper → pair (side / orbit; değişkenle geçiş)
-    const partner = helpers[0]
+    // yalnızca tam 2 ajan → pair; 3+ kadro V formasyonu kullanır
+    const partner = helpers.length === 1 ? helpers[0] : null
     if (partner) {
       const mode = getPairMode()
       later(420, () => {
@@ -137,11 +137,13 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
       })
     }
 
-    runTurn(lead, text, text, 200, false)
-
-    helpers.forEach((id, i) => {
-      runTurn(id, text, text, 700 + i * 180, false)
-    })
+    // sırayla konuş — 4 ajan aynı anda sallanmasın, sadece cevap veren hareket eder
+    const queue = [lead, ...helpers]
+    let delay = 200
+    for (const id of queue) {
+      runTurn(id, text, text, delay, false)
+      delay += 850
+    }
   }
 
   return {

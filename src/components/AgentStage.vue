@@ -19,6 +19,8 @@ const props = defineProps<{
   selectedIds?: string[]
   /** filtre pull 0–1 — yazdıkça ortaya */
   filterPulls?: Record<string, number>
+  /** konuşan / işi alan — kadroda ortaya geçer */
+  spotlightId?: string | null
 }>()
 
 const ids = AGENTS.map((a) => a.id)
@@ -31,7 +33,8 @@ const slots = computed(() =>
     companionIds: props.companionIds,
     pair: props.pair ?? null,
     selectedIds: props.selectedIds ?? [],
-    filterPulls: props.filterPulls ?? {}
+    filterPulls: props.filterPulls ?? {},
+    spotlightId: props.spotlightId ?? null
   })
 )
 
@@ -64,15 +67,24 @@ watch(
   }
 )
 
+/** Önceki kadro — sadece yeni gelen zıplar, herkes aynı anda değil. */
+const seenRoster = new Set<string>()
+
 watch(
   () => `${props.focusId ?? ''}|${props.allyIds.join(',')}|${props.companionIds.join(',')}`,
   () => {
     const arrived = [props.focusId, ...props.allyIds, ...props.companionIds].filter(
       Boolean
     ) as string[]
-    for (const id of arrived) {
+    const fresh = arrived.filter((id) => !seenRoster.has(id))
+    for (const id of arrived) seenRoster.add(id)
+    if (!fresh.length) return
+
+    // kalabalık çağrıda sadece lead zıplar + toz — 4 ajan aynı anda şov yapmasın
+    const lead = props.focusId ?? fresh[0]!
+    const showy = fresh.length === 1 ? fresh : fresh.filter((id) => id === lead)
+    for (const id of showy) {
       bounceKey[id] = (bounceKey[id] ?? 0) + 1
-      // summon toz kalkması
       const slot = slots.value.get(id)
       const agent = AGENT_BY_ID.get(id)
       if (slot && agent) {
@@ -138,7 +150,8 @@ function roleClass(agent: AgentDef) {
     props.companionIds,
     props.pair ?? null,
     props.selectedIds ?? [],
-    props.filterPulls ?? {}
+    props.filterPulls ?? {},
+    props.spotlightId ?? null
   )
 }
 
@@ -180,8 +193,14 @@ function isSoft(agent: AgentDef) {
   return isWait(agent) || isProbe(agent)
 }
 
+/** Odak yüzü: spotlight (konuşan) yoksa summon lead’i. */
+function isFront(agent: AgentDef) {
+  const front = props.spotlightId ?? props.focusId
+  return agent.id === front && !isSoft(agent)
+}
+
 function expressionFor(agent: AgentDef) {
-  if (agent.id === props.focusId && !isSoft(agent)) {
+  if (isFront(agent)) {
     if (props.chatEngaged) return 'effraye'
     if (snapFront.value) return 'surpris'
     return 'attentif'
@@ -192,16 +211,16 @@ function expressionFor(agent: AgentDef) {
 }
 
 function gazeModeFor(agent: AgentDef): 'chat' | 'front' | null {
-  if (agent.id === props.focusId && !isSoft(agent)) {
-    return props.chatEngaged ? 'chat' : 'front'
-  }
-  if (isSoft(agent)) return 'chat'
-  return props.chatEngaged ? null : 'front'
+  // chat odaktaysa herkes tam bakar — kimse yarım kalmasın
+  if (props.chatEngaged) return 'chat'
+  if (isFront(agent) || isSoft(agent)) return 'chat'
+  return 'front'
 }
 
 function styleFor(agent: AgentDef, slot: Slot) {
   const wait = isWait(agent)
   const probe = isProbe(agent)
+  const front = isFront(agent)
   const live = wait || probe
   const size = baseSize.value * slot.scale
   const blur = depthBlur(slot)
@@ -213,10 +232,10 @@ function styleFor(agent: AgentDef, slot: Slot) {
   return {
     left: `${slot.x}%`,
     top: `${slot.y}%`,
-    zIndex: slot.z + (wait ? 8 : probe ? 4 : 0),
+    zIndex: slot.z + (front ? 12 : wait ? 8 : probe ? 4 : 0),
     opacity: slot.opacity,
     width: `${size}px`,
-    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value, live ? 0.4 : 1)}`,
+    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value, live ? 0.4 : front ? 1 : 0.35)}`,
     filter: blur ? `blur(${blur}px)` : undefined,
     transition: t
   }
@@ -244,8 +263,8 @@ function shadowStyle(slot: Slot) {
 /** Chat panelinin “bakılan” noktası — input satırı. */
 function gazePointFor(agent: AgentDef) {
   const target = { x: window.innerWidth / 2, y: window.innerHeight - 78 }
+  if (props.chatEngaged) return target
   if (isSoft(agent)) return target
-  if (props.chatEngaged && agent.id === props.focusId) return target
   return null
 }
 </script>
@@ -268,7 +287,7 @@ function gazePointFor(agent: AgentDef) {
       :class="[
         'agent--' + roleClass(agent),
         {
-          'agent--focus': agent.id === focusId || (pair && (agent.id === pair.a || agent.id === pair.b)),
+          'agent--focus': isFront(agent) || (pair && (agent.id === pair.a || agent.id === pair.b)),
           'agent--pair-a': pair?.a === agent.id,
           'agent--pair-b': pair?.b === agent.id,
           'agent--pair': pair && (agent.id === pair.a || agent.id === pair.b),
@@ -292,9 +311,9 @@ function gazePointFor(agent: AgentDef) {
             :gaze-active="!!gazePointFor(agent)"
             :gaze-x="gazePointFor(agent)?.x ?? null"
             :gaze-y="gazePointFor(agent)?.y ?? null"
-            :gaze-down="agent.id === focusId && !!chatEngaged"
+            :gaze-down="!!chatEngaged"
             :gaze-mode="gazeModeFor(agent)"
-            :gaze-soft="agent.id !== focusId"
+            :gaze-soft="!isFront(agent) && !chatEngaged"
             class="agent__svg"
           />
         </div>
