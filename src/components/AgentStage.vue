@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { AGENTS, type AgentDef } from '@/agents'
 import { assignSlots, roleOf, type Slot } from '@/layout'
+import { clamp } from '@/bot/math'
 import type { StateId } from '@/bot/states'
 import BotAvatar from './BotAvatar.vue'
 
@@ -79,14 +80,18 @@ function depthBlur(slot: Slot) {
 function styleFor(agent: AgentDef, slot: Slot) {
   const size = baseSize.value * slot.scale
   const blur = depthBlur(slot)
+  // chat açıkken gövde chat’e doğru hafif yaslanır (oyunsu “dinliyorum”)
+  const lean = props.chatEngaged ? clamp((50 - slot.x) * 0.1, -5, 5) : 0
   return {
     left: `${slot.x}%`,
     top: `${slot.y}%`,
     zIndex: slot.z,
     opacity: slot.opacity,
     width: `${size}px`,
-    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d}px) ${floatFor(agent.id, drift.value)}`,
-    filter: blur ? `blur(${blur}px)` : undefined
+    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value)}`,
+    filter: blur ? `blur(${blur}px)` : undefined,
+    transition:
+      'left .95s cubic-bezier(.22,1,.36,1), top .95s cubic-bezier(.22,1,.36,1), width .85s cubic-bezier(.22,1,.36,1), opacity .7s ease, filter .7s ease, transform .55s cubic-bezier(.22,1,.36,1)'
   }
 }
 
@@ -119,7 +124,7 @@ function gazePoint() {
           :color="agent.color"
           :expression="agent.id === focusId ? 'attentif' : agent.expression"
           :state="stateFor(agent)"
-          :paper="'#070B14'"
+          :paper="'#E8EDF7'"
           :gaze-active="!!chatEngaged"
           :gaze-x="gazePoint()?.x ?? null"
           :gaze-y="gazePoint()?.y ?? null"

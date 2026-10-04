@@ -1,14 +1,17 @@
 import type { Look } from '@/bot/engine'
 import { clamp, easings } from '@/bot/math'
 
-/** Bakış açısı limitleri (derece). */
-export const YAW_MAX = 16
-export const PITCH_MAX = 13
-export const PITCH = 10
-/** Chat’e dönüş için baş rulosu. */
-export const TURN = 18
+/**
+ * Bakış yumuşak: ani kilitlenme yerine yavaş tur + küçük açı.
+ * Oyun/character feel: hedefe bakar ama biraz canlı kalsın (hafif wander).
+ */
+export const YAW_MAX = 11
+export const PITCH_MAX = 9
+export const PITCH = 8
+/** Chat’e dönüş için baş rulosu — abartısız. */
+export const TURN = 12
 export const SPIN = 360
-export const TURN_TIME = 1.1
+export const TURN_TIME = 1.25
 
 export interface Aim {
   /** hedefin bottan normalize farkı, -1..1 (sağ pozitif) */
@@ -27,7 +30,8 @@ export function lookTarget({ nx, ny, tour, pointer }: Aim): Look {
     pitch: PITCH - ny * PITCH_MAX,
     mix: tour,
     spin: SPIN * (1 - tour),
-    wander: pointer ? 0 : 1
+    // hafif wander: sabitlemesin, “dinliyorum” hissi versin
+    wander: pointer ? 0.38 : 1
   }
 }
 

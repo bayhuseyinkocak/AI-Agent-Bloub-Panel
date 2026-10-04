@@ -27,7 +27,7 @@ const props = withDefaults(
     shape: DEFAULT_SHAPE,
     color: DEFAULT_COLOR,
     expression: DEFAULT_EXPRESSION,
-    paper: '#070B14',
+    paper: '#E8EDF7',
     state: 'idle' as StateId,
     gazeX: null,
     gazeY: null,
@@ -76,7 +76,9 @@ function applyGaze() {
       tour: tourEase(clock - turnSince),
       pointer: true
     }),
-    clock
+    // yumuşak yakalama — ani kilit değil
+    clock,
+    0.45
   )
   aiming = true
 }
