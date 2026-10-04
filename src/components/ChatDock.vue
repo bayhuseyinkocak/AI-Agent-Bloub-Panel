@@ -147,6 +147,14 @@ function submit() {
 
 function onKeydown(e: KeyboardEvent) {
   const list = suggestions.value
+
+  if (e.key === 'Escape' && filterQuery.value !== null) {
+    e.preventDefault()
+    draft.value = draft.value.replace(/\/[a-zA-Z]*$/, '')
+    emitState()
+    return
+  }
+
   if (!list.length) return
 
   if (e.key === 'ArrowDown') {
@@ -159,15 +167,22 @@ function onKeydown(e: KeyboardEvent) {
     highlight.value = (highlight.value - 1 + list.length) % list.length
     return
   }
-  if (e.key === 'Tab' || e.key === 'Enter') {
+  if (e.key === 'Tab') {
     e.preventDefault()
     applySuggestion((list[highlight.value] ?? list[0]!).id)
     return
   }
-  if (e.key === 'Escape') {
+  if (e.key === 'Enter') {
     e.preventDefault()
-    draft.value = draft.value.replace(/\/[a-zA-Z]*$/, '')
-    emitState()
+    const q = filterQuery.value
+    // tam ad veya mesaj varsa GÖNDER; yalnızca yarım `/ön` ise seç
+    const exact = q !== null && rosterById.value.has(q)
+    const hasMessage = /\S/.test(draft.value.replace(/\/[a-zA-Z0-9_-]+/g, '').trim())
+    if (!exact && !hasMessage) {
+      applySuggestion((list[highlight.value] ?? list[0]!).id)
+      return
+    }
+    submit()
   }
 }
 

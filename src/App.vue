@@ -70,8 +70,9 @@ function flashState(id: string, state: StateId, ms: number) {
 }
 
 function resolveRoster(primaryId: string, coIds: string[]) {
-  const primary = getAgent(primaryId)!
+  const primary = getAgent(primaryId)
   const allies = coIds.filter((id) => id !== primaryId)
+  if (!primary) return { allies, companions: [] as string[] }
   const companions = primary.partners.filter(
     (id) => id !== primaryId && !allies.includes(id)
   )

@@ -29,7 +29,9 @@ export function applyRoster(defs: AgentDef[]): void {
 }
 
 export function applyPackRoster(pack: AgentPack): void {
-  applyRoster(packToAgentDefs(pack))
+  const defs = packToAgentDefs(pack)
+  // boş paket UI’ı soğutmasın — fallback AGENTS
+  applyRoster(defs.length ? defs : [...AGENTS])
 }
 
 export function resetRoster(): void {
