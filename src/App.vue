@@ -13,8 +13,10 @@ const messages = ref<ChatMessage[]>([])
 const focusId = ref<string | null>(null)
 const allyIds = ref<string[]>([])
 const companionIds = ref<string[]>([])
-/** yazarken canlı önizleme; null = gönderilmiş / boşta hali */
+/** yazarken seçilmiş (tam ad) ajanlar; null = boşta */
 const previewIds = ref<string[] | null>(null)
+/** filtre eşleşmesi — soft yaklaşım, lead değil */
+const filterIds = ref<string[]>([])
 const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
@@ -24,11 +26,18 @@ const pair = ref<{ a: string; b: string; mode: PairMode } | null>(null)
 const bus = createLocalBus()
 let unsubscribe: (() => void) | null = null
 
+/** Yapışkan kadro — summon sonrası mention’sız mesajlar buraya gider. */
+function stickyMentions(): string[] {
+  if (!focusId.value) return []
+  return [focusId.value, ...allyIds.value].filter((id, i, arr) => arr.indexOf(id) === i)
+}
+
 const pendingHint = computed(() => {
-  const live = previewIds.value?.length ? previewIds.value[0] : null
-  const who = live ?? focusId.value
-  if (who) return `${who} sahnede — /DIĞER ile değiştir`
-  return '/ARIA, /NOVA, /BLITZ…'
+  const selected = previewIds.value?.length ? previewIds.value : null
+  const sticky = stickyMentions()
+  const who = selected ?? sticky
+  if (who.length) return `${who.join(' + ')} — serbest yazabilirsin, / ile değiştir`
+  return '/ yaz, filtrele, Tab ile seç'
 })
 
 const activeIds = computed(() => {
@@ -74,10 +83,14 @@ function onPreview(ids: string[]) {
   const next = ids.join(',')
   const prev = previewIds.value?.join(',') ?? ''
   previewIds.value = ids
-  // ilk kez yazarken hafif “fark ettim” vurgusu
+  // seçim netleşince hafif “fark ettim” — filtre / unique prefix ile değil
   if (next !== prev && !focusId.value) {
     flashState(ids[0]!, AGENT_BY_ID.get(ids[0]!)!.arriveState, 500)
   }
+}
+
+function onFilter(ids: string[]) {
+  filterIds.value = ids
 }
 
 function onEngage(on: boolean) {
@@ -101,6 +114,7 @@ function onBusEvent(e: BusEvent) {
     case 'user.message':
       push({ from: 'you', text: e.text })
       previewIds.value = null
+      filterIds.value = []
       break
 
     case 'agent.called': {
@@ -173,6 +187,7 @@ function onSend(raw: string) {
     const mode = next ? (setPairMode(next), next) : togglePairMode()
     push({ from: 'you', text: raw })
     previewIds.value = null
+    filterIds.value = []
     push({ from: 'system', text: `Pair modu: ${mode}${mode === 'side' ? ' (yan yana)' : ' (orbit + bağ)'}` })
     if (pair.value) {
       pair.value = { ...pair.value, mode }
@@ -189,6 +204,7 @@ function onSend(raw: string) {
   if (unknown.length) {
     push({ from: 'you', text: raw })
     previewIds.value = null
+    filterIds.value = []
     push({
       from: 'system',
       text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${AGENTS.map((a) => a.id).join(', ')}`
@@ -197,18 +213,32 @@ function onSend(raw: string) {
   }
 
   if (!ids.length) {
+    // yapışkan kadro: mention yoksa son summon’daki ajanlara gider
+    const sticky = stickyMentions()
+    if (sticky.length && text) {
+      previewIds.value = null
+      bus.dispatch({
+        type: 'user.message',
+        text,
+        mentions: sticky
+      })
+      return
+    }
     push({ from: 'you', text: raw })
     previewIds.value = null
-    if (text) {
-      push({
-        from: 'system',
-        text: 'Mesaj için bir agent çağır: örn. /ARIA ' + text
-      })
-    }
+    filterIds.value = []
+    push({
+      from: 'system',
+      text: sticky.length
+        ? 'Boş mesaj gönderilemez.'
+        : 'Önce bir ajan seç: / yaz ve filtrele, ya da sol menüden tıkla.'
+    })
     return
   }
 
   // tek iş satırı, çok agent — lead/helpers bus’tan gelir
+  previewIds.value = null
+  filterIds.value = []
   bus.dispatch({
     type: 'user.message',
     text: text || raw,
@@ -242,12 +272,14 @@ onUnmounted(() => {
       :pair="pair"
       :states="states"
       :chat-engaged="chatEngaged"
+      :filter-ids="filterIds"
     />
     <ChatDock
       :messages="messages"
       :pending-hint="pendingHint"
       @send="onSend"
       @preview="onPreview"
+      @filter="onFilter"
       @engage="onEngage"
     />
   </div>

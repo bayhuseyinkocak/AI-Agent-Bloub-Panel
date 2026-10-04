@@ -266,6 +266,24 @@ code {
   opacity: 0.55;
 }
 
+/* filtre eşleşmesi — soft yaklaşım (lead değil) */
+.agent--soft {
+  filter: none;
+}
+
+.agent--soft .agent__glow {
+  opacity: 0.65;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.35), transparent 70%);
+}
+
+.agent--soft .agent__name {
+  color: var(--accent);
+}
+
+.agent--soft .agent__tag {
+  opacity: 1;
+}
+
 .agent__tag {
   display: flex;
   flex-direction: column;
@@ -703,6 +721,20 @@ code {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   outline: none;
+}
+
+.chat__chip--on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--muted);
 }
 
 .chat__chip-id {

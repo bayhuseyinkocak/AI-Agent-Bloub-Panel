@@ -15,6 +15,8 @@ const props = defineProps<{
   pair?: PairBinding | null
   states: Record<string, StateId>
   chatEngaged?: boolean
+  /** filtre eşleşmesi — soft yaklaşım (lead değil) */
+  filterIds?: string[]
 }>()
 
 const ids = AGENTS.map((a) => a.id)
@@ -174,21 +176,32 @@ function gazeModeFor(agent: AgentDef): 'chat' | 'front' | null {
   return props.chatEngaged ? null : 'front'
 }
 
+function isSoft(agent: AgentDef) {
+  if (!props.filterIds?.includes(agent.id)) return false
+  if (agent.id === props.focusId) return false
+  if (props.pair && (agent.id === props.pair.a || agent.id === props.pair.b)) return false
+  return true
+}
+
 function styleFor(agent: AgentDef, slot: Slot) {
-  const size = baseSize.value * slot.scale
+  const soft = isSoft(agent)
+  // filtre eşleşmesi: biraz yaklaş / büyür — ama lead slotuna gelmez
+  const softMul = soft ? 1.28 : 1
+  const size = baseSize.value * slot.scale * softMul
   const blur = depthBlur(slot)
-  // chat açıkken gövde chat’e doğru hafif yaslanır (oyunsu “dinliyorum”)
   const lean = props.chatEngaged ? clamp((50 - slot.x) * 0.1, -5, 5) : 0
+  const softDx = soft ? (50 - slot.x) * 0.07 : 0
+  const softDy = soft ? (62 - slot.y) * 0.05 : 0
   return {
-    left: `${slot.x}%`,
-    top: `${slot.y}%`,
-    zIndex: slot.z,
-    opacity: slot.opacity,
+    left: `calc(${slot.x}% + ${softDx}%)`,
+    top: `calc(${slot.y}% + ${softDy}%)`,
+    zIndex: slot.z + (soft ? 4 : 0),
+    opacity: Math.min(1, slot.opacity + (soft ? 0.22 : 0)),
     width: `${size}px`,
-    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value)}`,
+    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d + (soft ? 36 : 0)}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value)}`,
     filter: blur ? `blur(${blur}px)` : undefined,
     transition:
-      'left .95s cubic-bezier(.22,1,.36,1), top .95s cubic-bezier(.22,1,.36,1), width .85s cubic-bezier(.22,1,.36,1), opacity .7s ease, filter .7s ease, transform .55s cubic-bezier(.22,1,.36,1)'
+      'left .75s cubic-bezier(.22,1,.36,1), top .75s cubic-bezier(.22,1,.36,1), width .7s cubic-bezier(.22,1,.36,1), opacity .45s ease, filter .7s ease, transform .55s cubic-bezier(.22,1,.36,1)'
   }
 }
 
@@ -239,7 +252,8 @@ function gazePoint() {
           'agent--focus': agent.id === focusId || (pair && (agent.id === pair.a || agent.id === pair.b)),
           'agent--pair-a': pair?.a === agent.id,
           'agent--pair-b': pair?.b === agent.id,
-          'agent--pair': pair && (agent.id === pair.a || agent.id === pair.b)
+          'agent--pair': pair && (agent.id === pair.a || agent.id === pair.b),
+          'agent--soft': isSoft(agent)
         }
       ]"
       :style="styleFor(agent, slots.get(agent.id)!)"
