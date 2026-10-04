@@ -1,0 +1,34 @@
+# deps
+node_modules/
+
+# build
+dist/
+*.local
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# env
+.env
+.env.*
+!.env.example
+
+# test / coverage
+coverage/
+*.tsbuildinfo
+
+# vite
+.vite/
