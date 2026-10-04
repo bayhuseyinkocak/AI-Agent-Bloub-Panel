@@ -1,4 +1,5 @@
 import { AGENTS, AGENT_BY_ID, parseCommand } from '@/agents'
+import { getPairMode } from '@/pairMode'
 import type { StateId } from '@/bot/states'
 import type {
   AgentBus,
@@ -22,6 +23,7 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
   const mock = options.mock ?? true
   const handlers = new Set<BusHandler>()
   const timers = new Set<number>()
+  let activePair: { a: AgentId; b: AgentId } | null = null
 
   function emit(event: BusEventInput): void {
     const packet: BusEvent = { ...event, ts: Date.now() }
@@ -115,7 +117,25 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     if (!lead) return
 
     const helpers = mentions.slice(1)
+    if (activePair) {
+      emit({ type: 'agent.unpair', a: activePair.a, b: activePair.b })
+      activePair = null
+    }
     emit({ type: 'agent.called', lead, helpers })
+
+    // lead + ilk helper → pair (side / orbit; değişkenle geçiş)
+    const partner = helpers[0]
+    if (partner) {
+      const mode = getPairMode()
+      later(420, () => {
+        activePair = { a: lead, b: partner }
+        emit({ type: 'agent.pair', a: lead, b: partner, mode })
+        if (mode === 'orbit') {
+          emit({ type: 'agent.thinking', agentId: lead, state: 'orbit' })
+          emit({ type: 'agent.thinking', agentId: partner, state: 'orbit' })
+        }
+      })
+    }
 
     runTurn(lead, text, text, 200, false)
 

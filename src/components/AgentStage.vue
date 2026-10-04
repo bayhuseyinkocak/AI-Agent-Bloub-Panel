@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { AGENTS, AGENT_BY_ID, type AgentDef } from '@/agents'
-import { assignSlots, roleOf, type Slot } from '@/layout'
+import type { PairMode } from '@/bus'
+import { assignSlots, roleOf, type PairBinding, type Slot } from '@/layout'
 import { clamp } from '@/bot/math'
 import type { StateId } from '@/bot/states'
 import { COLOR_BY_ID } from '@/bot/skins'
@@ -11,6 +12,7 @@ const props = defineProps<{
   focusId: string | null
   allyIds: string[]
   companionIds: string[]
+  pair?: PairBinding | null
   states: Record<string, StateId>
   chatEngaged?: boolean
 }>()
@@ -22,7 +24,8 @@ const slots = computed(() =>
     ids,
     focusId: props.focusId,
     allyIds: props.allyIds,
-    companionIds: props.companionIds
+    companionIds: props.companionIds,
+    pair: props.pair ?? null
   })
 )
 
@@ -122,8 +125,27 @@ function stateFor(agent: AgentDef): StateId {
 }
 
 function roleClass(agent: AgentDef) {
-  return roleOf(agent.id, props.focusId, props.allyIds, props.companionIds)
+  return roleOf(agent.id, props.focusId, props.allyIds, props.companionIds, props.pair ?? null)
 }
+
+/** orbit pair: hafif bağ — iki slot ortası yumuşak kavis */
+const bond = computed(() => {
+  const p = props.pair
+  if (!p || p.mode !== 'orbit') return null
+  const sa = slots.value.get(p.a)
+  const sb = slots.value.get(p.b)
+  if (!sa || !sb) return null
+  const x1 = sa.x
+  const y1 = sa.y
+  const x2 = sb.x
+  const y2 = sb.y
+  const mx = (x1 + x2) / 2
+  const my = Math.min(y1, y2) - 8
+  return {
+    path: `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`,
+    mode: p.mode as PairMode
+  }
+})
 
 function depthBlur(slot: Slot) {
   // uzak katman hafif flu — perspektif derinliği destekler
@@ -198,11 +220,28 @@ function gazePoint() {
 
 <template>
   <div class="stage" aria-label="AI agent sahnesi">
+    <svg
+      v-if="bond"
+      class="pair-bond"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path class="pair-bond__path" :d="bond.path" />
+    </svg>
     <div
       v-for="agent in AGENTS"
       :key="agent.id"
       class="agent"
-      :class="['agent--' + roleClass(agent), { 'agent--focus': agent.id === focusId }]"
+      :class="[
+        'agent--' + roleClass(agent),
+        {
+          'agent--focus': agent.id === focusId || (pair && (agent.id === pair.a || agent.id === pair.b)),
+          'agent--pair-a': pair?.a === agent.id,
+          'agent--pair-b': pair?.b === agent.id,
+          'agent--pair': pair && (agent.id === pair.a || agent.id === pair.b)
+        }
+      ]"
       :style="styleFor(agent, slots.get(agent.id)!)"
     >
       <div class="agent__blob" :style="blobStyle(slots.get(agent.id)!)">

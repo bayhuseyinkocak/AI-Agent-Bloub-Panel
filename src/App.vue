@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { AGENT_BY_ID, AGENTS, parseCommand } from '@/agents'
-import { createLocalBus, type BusEvent } from '@/bus'
+import { createLocalBus, type BusEvent, type PairMode } from '@/bus'
+import { setPairMode, togglePairMode } from '@/pairMode'
 import type { StateId } from '@/bot/states'
 import AgentStage from '@/components/AgentStage.vue'
 import ChatDock, { type ChatMessage } from '@/components/ChatDock.vue'
@@ -16,6 +17,8 @@ const previewIds = ref<string[] | null>(null)
 const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
+/** aktif pair — side (yan yana) / orbit (bağ + orbit) */
+const pair = ref<{ a: string; b: string; mode: PairMode } | null>(null)
 
 const bus = createLocalBus()
 let unsubscribe: (() => void) | null = null
@@ -125,6 +128,18 @@ function onBusEvent(e: BusEvent) {
       states[e.agentId] = AGENT_BY_ID.get(e.agentId)?.idleState ?? 'idle'
       break
 
+    case 'agent.pair':
+      pair.value = { a: e.a, b: e.b, mode: e.mode }
+      flashState(e.a, AGENT_BY_ID.get(e.a)?.arriveState ?? 'exclaim', 600)
+      flashState(e.b, AGENT_BY_ID.get(e.b)?.arriveState ?? 'exclaim', 600)
+      break
+
+    case 'agent.unpair':
+      if (pair.value && pair.value.a === e.a && pair.value.b === e.b) {
+        pair.value = null
+      }
+      break
+
     case 'agent.handoff': {
       // sistem satırı: `ARIA → BLITZ: …` (isimler örnek — herkes herkese devredebilir)
       push({ from: 'system', text: `${e.from} → ${e.to}: ${e.task}` })
@@ -145,6 +160,24 @@ function onBusEvent(e: BusEvent) {
 }
 
 function onSend(raw: string) {
+  // Faz 4: pair modu — `!pair side|orbit` veya `!pair` (değiştir)
+  const pairCmd = raw.trim().match(/^!pair(?:\s+(side|orbit))?$/i)
+  if (pairCmd) {
+    const next = pairCmd[1]?.toLowerCase() as PairMode | undefined
+    const mode = next ? (setPairMode(next), next) : togglePairMode()
+    push({ from: 'you', text: raw })
+    previewIds.value = null
+    push({ from: 'system', text: `Pair modu: ${mode}${mode === 'side' ? ' (yan yana)' : ' (orbit + bağ)'}` })
+    if (pair.value) {
+      pair.value = { ...pair.value, mode }
+      if (mode === 'orbit') {
+        flashState(pair.value.a, 'orbit', 2000)
+        flashState(pair.value.b, 'orbit', 2000)
+      }
+    }
+    return
+  }
+
   const { ids, text, unknown } = parseCommand(raw)
 
   if (unknown.length) {
@@ -194,6 +227,7 @@ onUnmounted(() => {
       :focus-id="activeFocus"
       :ally-ids="activeRoster.allies"
       :companion-ids="activeRoster.companions"
+      :pair="pair"
       :states="states"
       :chat-engaged="chatEngaged"
     />

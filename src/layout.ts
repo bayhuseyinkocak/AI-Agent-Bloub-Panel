@@ -1,4 +1,12 @@
-export type Role = 'focus' | 'ally' | 'companion' | 'outer'
+import type { PairMode } from '@/bus/types'
+
+export type Role = 'focus' | 'ally' | 'companion' | 'outer' | 'pair'
+
+export interface PairBinding {
+  a: string
+  b: string
+  mode: PairMode
+}
 
 export interface Slot {
   /** stage yüzdesi, sol üst orijin */
@@ -17,7 +25,26 @@ export interface LayoutInput {
   focusId: string | null
   allyIds: string[]
   companionIds: string[]
+  /** aktif pair — yan yana / orbit ortak slotlar */
+  pair?: PairBinding | null
   seed?: number
+}
+
+/** side: yan yana + orta-ön. orbit: biraz açık, bağ + orbit state. */
+const PAIR_SIDE = {
+  y: 68,
+  gap: 13,
+  scale: 1.55,
+  z: 28,
+  z3d: 140
+}
+
+const PAIR_ORBIT = {
+  y: 60,
+  gap: 20,
+  scale: 1.35,
+  z: 28,
+  z3d: 110
 }
 
 /** Deterministik küçük gürültü — her agent için sabit ofset. */
@@ -62,7 +89,7 @@ const ALLY_FLANK: Array<{ x: number; y: number }> = [
  * - outer → uzak köşeler, küçük
  */
 export function assignSlots(input: LayoutInput): Map<string, Slot> {
-  const { ids, focusId, allyIds, companionIds } = input
+  const { ids, focusId, allyIds, companionIds, pair } = input
   const slots = new Map<string, Slot>()
   const outer: string[] = []
   let allyI = 0
@@ -72,9 +99,30 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
   // summon yoksa: yumuşak dağılım (herkes outer-ring ama daha dolu)
   const peacetime = !focusId
 
+  // pair slotları: a solda, b sağda (ortak odak)
+  if (pair) {
+    const base = pair.mode === 'orbit' ? PAIR_ORBIT : PAIR_SIDE
+    const pairIds = [pair.a, pair.b]
+    pairIds.forEach((id, i) => {
+      const jx = hash01(id, 3) * 2 - 1
+      const jy = hash01(id, 7) * 2 - 1
+      const dir = i === 0 ? -1 : 1
+      slots.set(id, {
+        x: 50 + dir * base.gap + jx * 0.4,
+        y: base.y + jy * 0.3,
+        scale: base.scale,
+        z: base.z,
+        opacity: 1,
+        z3d: base.z3d
+      })
+    })
+  }
+
   for (const id of ids) {
     const jx = hash01(id, 3) * 4 - 2
     const jy = hash01(id, 7) * 4 - 2
+
+    if (slots.has(id)) continue
 
     if (id === focusId) {
       slots.set(id, {
@@ -144,8 +192,10 @@ export function roleOf(
   id: string,
   focusId: string | null,
   allyIds: string[],
-  companionIds: string[]
+  companionIds: string[],
+  pair?: PairBinding | null
 ): Role {
+  if (pair && (id === pair.a || id === pair.b)) return 'pair'
   if (id === focusId) return 'focus'
   if (allyIds.includes(id)) return 'ally'
   if (companionIds.includes(id)) return 'companion'
