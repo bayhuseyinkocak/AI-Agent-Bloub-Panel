@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { AGENT_BY_ID, AGENTS, parseCommand } from '@/agents'
-import { createLocalBus, type BusEvent, type PairMode } from '@/bus'
+import { applyTransport, dispatchBus, subscribeBus, type BusEvent, type PairMode } from '@/bus'
+import { applyPackRoster, getAgent, getAgents, parseRosterCommand } from '@/roster'
+import { loadActivePack, type AgentPack } from '@/pack'
 import { setPairMode, togglePairMode } from '@/pairMode'
 import type { StateId } from '@/bot/states'
 import AgentStage from '@/components/AgentStage.vue'
@@ -25,7 +26,6 @@ const seq = ref(0)
 /** aktif pair — side (yan yana) / orbit (bağ + orbit) */
 const pair = ref<{ a: string; b: string; mode: PairMode } | null>(null)
 
-const bus = createLocalBus()
 let unsubscribe: (() => void) | null = null
 
 /** Yapışkan kadro — summon sonrası mention’sız mesajlar buraya gider. */
@@ -64,13 +64,13 @@ const activeRoster = computed(() => {
 function flashState(id: string, state: StateId, ms: number) {
   states[id] = state
   window.setTimeout(() => {
-    const agent = AGENT_BY_ID.get(id)
+    const agent = getAgent(id)
     if (agent) states[id] = agent.idleState
   }, ms)
 }
 
 function resolveRoster(primaryId: string, coIds: string[]) {
-  const primary = AGENT_BY_ID.get(primaryId)!
+  const primary = getAgent(primaryId)!
   const allies = coIds.filter((id) => id !== primaryId)
   const companions = primary.partners.filter(
     (id) => id !== primaryId && !allies.includes(id)
@@ -88,7 +88,7 @@ function onPreview(ids: string[]) {
   selectedIds.value = ids
   if (next !== prev && ids.length && next.split(',').length > prev.split(',').filter(Boolean).length) {
     const added = ids.find((id) => !prev.includes(id))
-    if (added) flashState(added, AGENT_BY_ID.get(added)?.arriveState ?? 'exclaim', 450)
+    if (added) flashState(added, getAgent(added)?.arriveState ?? 'exclaim', 450)
   }
 }
 
@@ -103,6 +103,12 @@ function onEngage(on: boolean) {
 /** Sol menüden summon — chat ile aynı yolu kullanır. */
 function onSummon(id: string) {
   onSend(`/${id}`)
+}
+
+/** Paket değişti → roster + transport (Faz 3–4). */
+function onPackChanged(pack: AgentPack) {
+  applyPackRoster(pack)
+  applyTransport(pack.transport, pack.url)
 }
 
 /** Sahne boşluğuna tıkla → chat’ten çık, odak karsiya baksın. */
@@ -128,7 +134,7 @@ function onBusEvent(e: BusEvent) {
       companionIds.value = companions
       spotlightId.value = e.lead
 
-      flashState(e.lead, AGENT_BY_ID.get(e.lead)?.arriveState ?? 'exclaim', 900)
+      flashState(e.lead, getAgent(e.lead)?.arriveState ?? 'exclaim', 900)
       // helper’lar sessiz gelsin — kalabalıkta herkes zıplamasın
       if (!helpers.length) {
         for (const id of companions) flashState(id, 'notify', 500)
@@ -139,7 +145,7 @@ function onBusEvent(e: BusEvent) {
     case 'agent.thinking':
       states[e.agentId] = e.state
       // sadece gerçekten düşünen öne çıkar (orbit vs. değil)
-      if (e.state === (AGENT_BY_ID.get(e.agentId)?.thinkState ?? 'thinking')) {
+      if (e.state === (getAgent(e.agentId)?.thinkState ?? 'thinking')) {
         spotlightId.value = e.agentId
       }
       break
@@ -154,7 +160,7 @@ function onBusEvent(e: BusEvent) {
       break
 
     case 'agent.done':
-      states[e.agentId] = AGENT_BY_ID.get(e.agentId)?.idleState ?? 'idle'
+      states[e.agentId] = getAgent(e.agentId)?.idleState ?? 'idle'
       // konuşma bitince lead ortaya döner (varsa)
       if (spotlightId.value === e.agentId && focusId.value) {
         spotlightId.value = focusId.value
@@ -163,8 +169,8 @@ function onBusEvent(e: BusEvent) {
 
     case 'agent.pair':
       pair.value = { a: e.a, b: e.b, mode: e.mode }
-      flashState(e.a, AGENT_BY_ID.get(e.a)?.arriveState ?? 'exclaim', 600)
-      flashState(e.b, AGENT_BY_ID.get(e.b)?.arriveState ?? 'exclaim', 600)
+      flashState(e.a, getAgent(e.a)?.arriveState ?? 'exclaim', 600)
+      flashState(e.b, getAgent(e.b)?.arriveState ?? 'exclaim', 600)
       break
 
     case 'agent.unpair':
@@ -182,7 +188,7 @@ function onBusEvent(e: BusEvent) {
         allyIds.value = [...allyIds.value, e.to]
         const { companions } = resolveRoster(focusId.value ?? e.from, allyIds.value)
         companionIds.value = companions
-        flashState(e.to, AGENT_BY_ID.get(e.to)?.arriveState ?? 'exclaim', 700)
+        flashState(e.to, getAgent(e.to)?.arriveState ?? 'exclaim', 700)
       }
       break
     }
@@ -213,7 +219,7 @@ function onSend(raw: string) {
     return
   }
 
-  const { ids, text, unknown } = parseCommand(raw)
+  const { ids, text, unknown } = parseRosterCommand(raw)
 
   if (unknown.length) {
     push({ from: 'you', text: raw })
@@ -221,7 +227,7 @@ function onSend(raw: string) {
     filterPulls.value = {}
     push({
       from: 'system',
-      text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${AGENTS.map((a) => a.id).join(', ')}`
+      text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${getAgents().map((a) => a.id).join(', ')}`
     })
     return
   }
@@ -232,7 +238,7 @@ function onSend(raw: string) {
     if (sticky.length && text) {
       selectedIds.value = []
       filterPulls.value = {}
-      bus.dispatch({
+      dispatchBus({
         type: 'user.message',
         text,
         mentions: sticky
@@ -254,7 +260,7 @@ function onSend(raw: string) {
   // tek iş satırı, çok agent — lead/helpers bus’tan gelir
   selectedIds.value = []
   filterPulls.value = {}
-  bus.dispatch({
+  dispatchBus({
     type: 'user.message',
     text: text || raw,
     mentions: ids
@@ -262,7 +268,10 @@ function onSend(raw: string) {
 }
 
 onMounted(() => {
-  unsubscribe = bus.subscribe(onBusEvent)
+  const pack = loadActivePack()
+  applyPackRoster(pack)
+  applyTransport(pack.transport, pack.url)
+  unsubscribe = subscribeBus(onBusEvent)
 })
 
 onUnmounted(() => {
@@ -279,6 +288,7 @@ onUnmounted(() => {
       :focus-id="focusId"
       :ally-ids="allyIds"
       @summon="onSummon"
+      @pack-changed="onPackChanged"
     />
     <AgentStage
       :focus-id="activeFocus"

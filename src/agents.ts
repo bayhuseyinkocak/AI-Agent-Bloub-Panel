@@ -169,14 +169,17 @@ export function findAgent(token: string): AgentDef | undefined {
 }
 
 /** `/ARIA /ARIS merhaba` → { ids: ['ARIA','ARIS'], text: 'merhaba' } */
-export function parseCommand(raw: string): { ids: string[]; text: string; unknown: string[] } {
+export function parseCommand(
+  raw: string,
+  lookup: Map<string, AgentDef> = AGENT_BY_ID
+): { ids: string[]; text: string; unknown: string[] } {
   const ids: string[] = []
   const unknown: string[] = []
   const textParts: string[] = []
   for (const part of raw.trim().split(/\s+/)) {
     if (part.startsWith('/') && part.length > 1) {
       const key = part.slice(1).toUpperCase()
-      const agent = AGENT_BY_ID.get(key)
+      const agent = lookup.get(key)
       if (agent) {
         if (!ids.includes(agent.id)) ids.push(agent.id)
       } else {

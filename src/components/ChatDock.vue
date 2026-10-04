@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { AGENTS, AGENT_BY_ID } from '@/agents'
+import { useRoster } from '@/roster'
 
 export interface ChatMessage {
   id: number
@@ -28,6 +28,7 @@ const emit = defineEmits<{
 const draft = ref('')
 const listEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const { agents: rosterAgents, byId: rosterById } = useRoster()
 const highlight = ref(0)
 /** sadece Tab / Enter / tık ile eklenir — yazmak çağırmaz */
 const selectedIds = ref<string[]>([])
@@ -53,7 +54,7 @@ function parseDraftMentions(raw: string): { held: string[]; typing: string | nul
     const stillTyping = i === parts.length - 1 && !hasTrailingSpace
     if (stillTyping) {
       typing = key
-    } else if (key && AGENT_BY_ID.has(key)) {
+    } else if (key && rosterById.value.has(key)) {
       if (!held.includes(key)) held.push(key)
     }
   }
@@ -72,7 +73,7 @@ function hasToken(raw: string, id: string): boolean {
 function readyIds(): string[] {
   const { held, typing } = parseDraftMentions(draft.value)
   const out: string[] = [...held]
-  if (typing && AGENT_BY_ID.has(typing) && !out.includes(typing)) out.push(typing)
+  if (typing && rosterById.value.has(typing) && !out.includes(typing)) out.push(typing)
   for (const id of selectedIds.value) {
     if (hasToken(draft.value, id) && !out.includes(id)) out.push(id)
   }
@@ -86,7 +87,7 @@ const suggestions = computed(() => {
   const q = filterQuery.value
   if (q === null) return []
   const taken = new Set(selectedIds.value.filter((id) => hasToken(draft.value, id)))
-  return AGENTS.filter((a) => a.id.startsWith(q) && !taken.has(a.id)).slice(0, 8)
+  return rosterAgents.value.filter((a) => a.id.startsWith(q) && !taken.has(a.id)).slice(0, 8)
 })
 
 /**
@@ -96,8 +97,8 @@ const suggestions = computed(() => {
 function computePulls(query: string | null, ready: string[]): Record<string, number> {
   const pulls: Record<string, number> = {}
   if (!query || query.length < 1) return pulls
-  if (AGENT_BY_ID.has(query)) return pulls
-  for (const a of AGENTS) {
+  if (rosterById.value.has(query)) return pulls
+  for (const a of rosterAgents.value) {
     if (ready.includes(a.id)) continue
     if (!a.id.startsWith(query)) continue
     const specific = query.length / a.id.length

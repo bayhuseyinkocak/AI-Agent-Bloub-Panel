@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { AGENTS, AGENT_BY_ID, type AgentDef } from '@/agents'
+import { type AgentDef } from '@/agents'
 import type { PairMode } from '@/bus'
 import { assignSlots, roleOf, type PairBinding, type Slot } from '@/layout'
+import { getAgent, useRoster } from '@/roster'
 import { clamp } from '@/bot/math'
 import type { StateId } from '@/bot/states'
 import { COLOR_BY_ID } from '@/bot/skins'
@@ -23,11 +24,12 @@ const props = defineProps<{
   spotlightId?: string | null
 }>()
 
-const ids = AGENTS.map((a) => a.id)
+const { agents: rosterAgents } = useRoster()
+const ids = computed(() => rosterAgents.value.map((a) => a.id))
 
 const slots = computed(() =>
   assignSlots({
-    ids,
+    ids: ids.value,
     focusId: props.focusId,
     allyIds: props.allyIds,
     companionIds: props.companionIds,
@@ -86,7 +88,7 @@ watch(
     for (const id of showy) {
       bounceKey[id] = (bounceKey[id] ?? 0) + 1
       const slot = slots.value.get(id)
-      const agent = AGENT_BY_ID.get(id)
+      const agent = getAgent(id)
       if (slot && agent) {
         const color = COLOR_BY_ID.get(agent.color)?.hex ?? '#E8EDF7'
         window.dispatchEvent(
@@ -281,7 +283,7 @@ function gazePointFor(agent: AgentDef) {
       <path class="pair-bond__path" :d="bond.path" />
     </svg>
     <div
-      v-for="agent in AGENTS"
+      v-for="agent in rosterAgents"
       :key="agent.id"
       class="agent"
       :class="[

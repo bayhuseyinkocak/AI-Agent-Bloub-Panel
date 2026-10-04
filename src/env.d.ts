@@ -3,3 +3,9 @@ declare module '*.vue' {
   const component: DefineComponent<object, object, unknown>
   export default component
 }
+
+declare module '@/packs/demo-avatars.json' {
+  import type { AgentPack } from '@/pack/types'
+  const pack: AgentPack
+  export default pack
+}

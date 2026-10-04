@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { AGENTS, type AgentDef } from '@/agents'
+import { type AgentDef } from '@/agents'
+import { useRoster } from '@/roster'
 import type { ChatMessage } from '@/components/ChatDock.vue'
 import { getPairMode, setPairMode } from '@/pairMode'
 import type { PairMode } from '@/bus'
+import type { AgentPack } from '@/pack'
+import PackSettings from './PackSettings.vue'
 
 type PanelId = 'agents' | 'log' | 'settings'
 
@@ -15,6 +18,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   summon: [id: string]
+  packChanged: [pack: AgentPack]
 }>()
 
 const open = ref(false)
@@ -22,8 +26,10 @@ const panel = ref<PanelId | null>(null)
 const pairMode = ref<PairMode>(getPairMode())
 const rootEl = ref<HTMLElement | null>(null)
 
+const { agents: rosterAgents } = useRoster()
+
 const roster = computed(() =>
-  AGENTS.map((a: AgentDef) => ({
+  rosterAgents.value.map((a: AgentDef) => ({
     ...a,
     live: props.focusId === a.id || props.allyIds.includes(a.id)
   }))
@@ -171,7 +177,7 @@ onUnmounted(() => {
             {{ pairMode === 'side' ? 'side' : 'orbit' }}
           </button>
         </div>
-        <p class="nav__empty">Sahne tam ekran kalır; menü üst katmanda durur.</p>
+        <PackSettings :active="panel === 'settings'" @pack-changed="emit('packChanged', $event)" />
       </div>
     </div>
   </aside>

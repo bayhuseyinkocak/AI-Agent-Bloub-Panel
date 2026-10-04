@@ -15,6 +15,9 @@ export type BusEventInput =
 
 export type PairMode = 'side' | 'orbit'
 
+/** Transport bağlantı durumu — ayarlarda rozet. */
+export type BusConnectionStatus = 'local' | 'connecting' | 'open' | 'closed' | 'error'
+
 export type BusEvent = BusEventInput & { ts: number }
 
 export type BusEventType = BusEvent['type']
