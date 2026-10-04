@@ -10,6 +10,7 @@ const props = defineProps<{
   allyIds: string[]
   companionIds: string[]
   states: Record<string, StateId>
+  chatEngaged?: boolean
 }>()
 
 const ids = AGENTS.map((a) => a.id)
@@ -68,21 +69,36 @@ function roleClass(agent: AgentDef) {
   return roleOf(agent.id, props.focusId, props.allyIds, props.companionIds)
 }
 
+function depthBlur(slot: Slot) {
+  // uzak katman hafif flu — perspektif derinliği destekler
+  if (slot.z3d <= -100) return 1.2
+  if (slot.z3d < 0) return 0.6
+  return 0
+}
+
 function styleFor(agent: AgentDef, slot: Slot) {
   const size = baseSize.value * slot.scale
+  const blur = depthBlur(slot)
   return {
     left: `${slot.x}%`,
     top: `${slot.y}%`,
     zIndex: slot.z,
     opacity: slot.opacity,
     width: `${size}px`,
-    transform: `translate(-50%, -50%) ${floatFor(agent.id, drift.value)}`
+    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d}px) ${floatFor(agent.id, drift.value)}`,
+    filter: blur ? `blur(${blur}px)` : undefined
   }
 }
 
 function blobStyle(slot: Slot) {
   const size = baseSize.value * slot.scale
   return { width: `${size}px`, height: `${size}px` }
+}
+
+/** Chat panelinin “bakılan” noktası — input satırı. */
+function gazePoint() {
+  if (!props.chatEngaged) return null
+  return { x: window.innerWidth / 2, y: window.innerHeight - 78 }
 }
 </script>
 
@@ -104,6 +120,9 @@ function blobStyle(slot: Slot) {
           :expression="agent.id === focusId ? 'attentif' : agent.expression"
           :state="stateFor(agent)"
           :paper="'#070B14'"
+          :gaze-active="!!chatEngaged"
+          :gaze-x="gazePoint()?.x ?? null"
+          :gaze-y="gazePoint()?.y ?? null"
           class="agent__svg"
         />
       </div>

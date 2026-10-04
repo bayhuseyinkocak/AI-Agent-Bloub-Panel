@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, shallowRef, triggerRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, triggerRef, watch } from 'vue'
 import { NOTIF_BLUE } from '@/bot/decor'
 import { BotEngine, type BotFrame } from '@/bot/engine'
 import { mixHex, COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID } from '@/bot/skins'
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '@/bot/expressions'
 import { DEMI_VIEWBOX, RAYON } from '@/bot/repere'
-import type { StateId } from '@/bot/states'
+import { STATE_BY_ID, type StateId } from '@/bot/states'
+import { lookTarget, tourEase, TURN_TIME } from '@/ui/gaze'
+import { clamp } from '@/bot/math'
 
 const props = withDefaults(
   defineProps<{
@@ -15,6 +17,10 @@ const props = withDefaults(
     expression?: string
     paper?: string
     state?: StateId
+    /** ekranda bakılacak nokta (client koordinat); null = serbest bakış */
+    gazeX?: number | null
+    gazeY?: number | null
+    gazeActive?: boolean
   }>(),
   {
     size: 120,
@@ -22,7 +28,10 @@ const props = withDefaults(
     color: DEFAULT_COLOR,
     expression: DEFAULT_EXPRESSION,
     paper: '#070B14',
-    state: 'idle' as StateId
+    state: 'idle' as StateId,
+    gazeX: null,
+    gazeY: null,
+    gazeActive: false
   }
 )
 
@@ -41,12 +50,43 @@ const maskId = `bot-mask-${uid}`
 let raf = 0
 let clock = 0
 let last = 0
+const svgEl = ref<SVGSVGElement | null>(null)
+let aiming = false
+let turnSince = 0
+
+function applyGaze() {
+  const active = props.gazeActive && props.gazeX != null && props.gazeY != null
+  const faceOk = STATE_BY_ID.get(props.state)?.baseFace !== false
+  if (!active || !faceOk) {
+    if (aiming) {
+      engine.setLook(null, clock, TURN_TIME)
+      aiming = false
+    }
+    return
+  }
+  const box = svgEl.value?.getBoundingClientRect()
+  if (!box || box.width === 0 || box.height === 0) return
+  if (!aiming) turnSince = clock
+  const demiW = Math.max(1, window.innerWidth / 2)
+  const demiH = Math.max(1, window.innerHeight / 2)
+  engine.setLook(
+    lookTarget({
+      nx: clamp((props.gazeX! - (box.left + box.width / 2)) / demiW, -1, 1),
+      ny: clamp((props.gazeY! - (box.top + box.height / 2)) / demiH, -1, 1),
+      tour: tourEase(clock - turnSince),
+      pointer: true
+    }),
+    clock
+  )
+  aiming = true
+}
 
 function tick(now: number) {
   if (!last) last = now
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
   clock += dt
+  applyGaze()
   frame.value = engine.sample(clock)
   triggerRef(frame)
   raf = requestAnimationFrame(tick)
@@ -81,6 +121,7 @@ function dotAttrs(dot: BotFrame['dots'][number]) {
 
 <template>
   <svg
+    ref="svgEl"
     :width="typeof props.size === 'number' ? props.size : '100%'"
     :height="typeof props.size === 'number' ? props.size : '100%'"
     :style="typeof props.size === 'string' ? { width: props.size, height: '100%', display: 'block' } : undefined"

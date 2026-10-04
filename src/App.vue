@@ -9,12 +9,31 @@ const messages = ref<ChatMessage[]>([])
 const focusId = ref<string | null>(null)
 const allyIds = ref<string[]>([])
 const companionIds = ref<string[]>([])
+/** yazarken canlı önizleme; null = gönderilmiş / boşta hali */
+const previewIds = ref<string[] | null>(null)
+const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
 
 const pendingHint = computed(() => {
-  if (focusId.value) return `${focusId.value} sahnede — /DIĞER ile değiştir`
+  const live = previewIds.value?.length ? previewIds.value[0] : null
+  const who = live ?? focusId.value
+  if (who) return `${who} sahnede — /DIĞER ile değiştir`
   return '/ARIA, /NOVA, /BLITZ…'
+})
+
+const activeIds = computed(() => {
+  if (previewIds.value?.length) return previewIds.value
+  if (focusId.value) return [focusId.value, ...allyIds.value]
+  return []
+})
+
+const activeFocus = computed(() => activeIds.value[0] ?? null)
+
+const activeRoster = computed(() => {
+  const ids = activeIds.value
+  if (!ids.length) return { allies: [] as string[], companions: [] as string[] }
+  return resolveRoster(ids[0]!, ids.slice(1))
 })
 
 function pickReply(agent: AgentDef, userText: string) {
@@ -46,10 +65,29 @@ function push(msg: Omit<ChatMessage, 'id' | 'ts'>) {
   messages.value.push({ ...msg, id: ++seq.value, ts: Date.now() })
 }
 
+function onPreview(ids: string[]) {
+  if (!ids.length) {
+    previewIds.value = null
+    return
+  }
+  const next = ids.join(',')
+  const prev = previewIds.value?.join(',') ?? ''
+  previewIds.value = ids
+  // ilk kez yazarken hafif “fark ettim” vurgusu
+  if (next !== prev && !focusId.value) {
+    flashState(ids[0]!, AGENT_BY_ID.get(ids[0]!)!.arriveState, 500)
+  }
+}
+
+function onEngage(on: boolean) {
+  chatEngaged.value = on
+}
+
 function onSend(raw: string) {
   const { ids, text, unknown } = parseCommand(raw)
 
   push({ from: 'you', text: raw })
+  previewIds.value = null
 
   if (unknown.length) {
     push({
@@ -102,11 +140,18 @@ function onSend(raw: string) {
 <template>
   <div class="floor">
     <AgentStage
-      :focus-id="focusId"
-      :ally-ids="allyIds"
-      :companion-ids="companionIds"
+      :focus-id="activeFocus"
+      :ally-ids="activeRoster.allies"
+      :companion-ids="activeRoster.companions"
       :states="states"
+      :chat-engaged="chatEngaged"
     />
-    <ChatDock :messages="messages" :pending-hint="pendingHint" @send="onSend" />
+    <ChatDock
+      :messages="messages"
+      :pending-hint="pendingHint"
+      @send="onSend"
+      @preview="onPreview"
+      @engage="onEngage"
+    />
   </div>
 </template>

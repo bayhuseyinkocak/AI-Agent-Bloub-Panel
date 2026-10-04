@@ -8,6 +8,8 @@ export interface Slot {
   scale: number
   z: number
   opacity: number
+  /** perspektif derinliği (px) — yüksek = ekrana / chat’e yakın */
+  z3d: number
 }
 
 export interface LayoutInput {
@@ -80,7 +82,8 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
         y: 78 + jy * 0.2,
         scale: 2.15,
         z: 30,
-        opacity: 1
+        opacity: 1,
+        z3d: 160
       })
       continue
     }
@@ -93,7 +96,8 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
         y: base.y + jy,
         scale: 0.72,
         z: 20,
-        opacity: 0.95
+        opacity: 0.95,
+        z3d: 48
       })
       continue
     }
@@ -106,7 +110,8 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
         y: base.y + jy,
         scale: 0.52,
         z: 10,
-        opacity: 0.82
+        opacity: 0.82,
+        z3d: 0
       })
       continue
     }
@@ -127,7 +132,8 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
       y: base.y + jy + pull * Math.sign(45 - base.y) * 0.1 + towardCenterY,
       scale: peacetime ? 0.48 : 0.3,
       z: 5,
-      opacity: peacetime ? 0.72 : 0.45
+      opacity: peacetime ? 0.72 : 0.45,
+      z3d: peacetime ? -80 : -180
     })
   })
 

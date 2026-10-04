@@ -17,6 +17,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [text: string]
+  /** yazarken canlı summon önizlemesi (boş liste = bırak) */
+  preview: [ids: string[]]
+  /** input odağı — avatarlar chat’e baksın */
+  engage: [on: boolean]
 }>()
 
 const draft = ref('')
@@ -30,9 +34,38 @@ const suggestions = computed(() => {
   return AGENTS.filter((a) => a.id.startsWith(q)).slice(0, 5)
 })
 
+/** Yazdıkça `/ADI` veya tekil önek (`/A`) yakalanır. */
+function previewFromDraft(raw: string): string[] {
+  const ids: string[] = []
+  const parts = raw.trim().split(/\s+/)
+  for (const part of parts) {
+    if (!part.startsWith('/') || part.length < 2) continue
+    const key = part.slice(1).toUpperCase()
+    const exact = AGENTS.find((a) => a.id === key)
+    if (exact) {
+      if (!ids.includes(exact.id)) ids.push(exact.id)
+      continue
+    }
+    const hits = AGENTS.filter((a) => a.id.startsWith(key))
+    if (hits.length === 1 && !ids.includes(hits[0]!.id)) ids.push(hits[0]!.id)
+  }
+  return ids
+}
+
+watch(draft, (val) => {
+  emit('preview', previewFromDraft(val))
+})
+
+function onInput(e: Event) {
+  const val = (e.target as HTMLInputElement).value
+  draft.value = val
+  emit('preview', previewFromDraft(val))
+}
+
 function applySuggestion(id: string) {
   draft.value = draft.value.replace(/\/[a-zA-Z]*$/, `/${id} `)
   inputEl.value?.focus()
+  emit('preview', previewFromDraft(draft.value))
 }
 
 function submit() {
@@ -40,6 +73,15 @@ function submit() {
   if (!text) return
   emit('send', text)
   draft.value = ''
+  emit('preview', [])
+}
+
+function onFocus() {
+  emit('engage', true)
+}
+
+function onBlur() {
+  emit('engage', draft.value.trim().length > 0)
 }
 
 watch(
@@ -100,6 +142,9 @@ function formatTs(ts: number) {
         spellcheck="false"
         :placeholder="pendingHint || '/AGENT_ADI mesaj…'"
         aria-label="Mesaj veya agent komutu"
+        @focus="onFocus"
+        @blur="onBlur"
+        @input="onInput"
       />
       <button class="chat__send" type="submit">Gönder</button>
     </form>
