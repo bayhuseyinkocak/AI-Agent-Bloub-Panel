@@ -21,6 +21,8 @@ const props = withDefaults(
     gazeX?: number | null
     gazeY?: number | null
     gazeActive?: boolean
+    /** odak avatar: chat’e doğru ekstra aşağı bakış */
+    gazeDown?: boolean
   }>(),
   {
     size: 120,
@@ -31,7 +33,8 @@ const props = withDefaults(
     state: 'idle' as StateId,
     gazeX: null,
     gazeY: null,
-    gazeActive: false
+    gazeActive: false,
+    gazeDown: false
   }
 )
 
@@ -74,7 +77,10 @@ function applyGaze() {
       nx: clamp((props.gazeX! - (box.left + box.width / 2)) / demiW, -1, 1),
       ny: clamp((props.gazeY! - (box.top + box.height / 2)) / demiH, -1, 1),
       tour: tourEase(clock - turnSince),
-      pointer: true
+      pointer: true,
+      // en öndeki: chat’e dikine baksın (effraye eğilimi)
+      down: props.gazeDown ? 16 : 0,
+      nyBoost: props.gazeDown ? 2.2 : 1
     }),
     // yumuşak yakalama — ani kilit değil
     clock,

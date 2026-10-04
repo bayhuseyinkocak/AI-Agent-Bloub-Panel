@@ -21,13 +21,19 @@ export interface Aim {
   /** 0..1 hedefe kilitlenme */
   tour: number
   pointer: boolean
+  /** ek aşağı bakış (derece) — odak avatar chat’e eğilsin */
+  down?: number
+  /** ny çarpanı — yakın hedefte yön farkını büyüt */
+  nyBoost?: number
 }
 
 /** Hedefe bakış Look’u. `mix` yükseldikçe devralır. */
-export function lookTarget({ nx, ny, tour, pointer }: Aim): Look {
+export function lookTarget({ nx, ny, tour, pointer, down = 0, nyBoost = 1 }: Aim): Look {
+  const y = ny * nyBoost
   return {
     yaw: -TURN + nx * YAW_MAX,
-    pitch: PITCH - ny * PITCH_MAX,
+    // aşağı bakan hedef: pitch düşer (effraye benzeri bakış)
+    pitch: PITCH - y * PITCH_MAX - down,
     mix: tour,
     spin: SPIN * (1 - tour),
     // hafif wander: sabitlemesin, “dinliyorum” hissi versin

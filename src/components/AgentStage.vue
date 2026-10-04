@@ -77,6 +77,14 @@ function depthBlur(slot: Slot) {
   return 0
 }
 
+function expressionFor(agent: AgentDef) {
+  // en öne gelen: chat’e yazarken aşağı bakan “effraye” (Scared)
+  if (agent.id === props.focusId) {
+    return props.chatEngaged ? 'effraye' : 'attentif'
+  }
+  return agent.expression
+}
+
 function styleFor(agent: AgentDef, slot: Slot) {
   const size = baseSize.value * slot.scale
   const blur = depthBlur(slot)
@@ -100,6 +108,20 @@ function blobStyle(slot: Slot) {
   return { width: `${size}px`, height: `${size}px` }
 }
 
+/** Temas gölgesi: yakın obje geniş/soft, uzak obje dar/soluk. */
+function shadowStyle(slot: Slot) {
+  const near = clamp((slot.z3d + 180) / 340, 0, 1)
+  const w = 55 + near * 55
+  const h = 12 + near * 10
+  const o = 0.12 + near * 0.28
+  return {
+    width: `${w}%`,
+    height: `${h}%`,
+    opacity: o,
+    filter: `blur(${8 - near * 4}px)`
+  }
+}
+
 /** Chat panelinin “bakılan” noktası — input satırı. */
 function gazePoint() {
   if (!props.chatEngaged) return null
@@ -117,17 +139,19 @@ function gazePoint() {
       :style="styleFor(agent, slots.get(agent.id)!)"
     >
       <div class="agent__blob" :style="blobStyle(slots.get(agent.id)!)">
+        <div class="agent__ground" :style="shadowStyle(slots.get(agent.id)!)" />
         <div class="agent__glow" />
         <BotAvatar
           size="100%"
           :shape="agent.shape"
           :color="agent.color"
-          :expression="agent.id === focusId ? 'attentif' : agent.expression"
+          :expression="expressionFor(agent)"
           :state="stateFor(agent)"
           :paper="'#E8EDF7'"
           :gaze-active="!!chatEngaged"
           :gaze-x="gazePoint()?.x ?? null"
           :gaze-y="gazePoint()?.y ?? null"
+          :gaze-down="agent.id === focusId && !!chatEngaged"
           class="agent__svg"
         />
       </div>
