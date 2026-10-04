@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { AGENTS, type AgentDef } from '@/agents'
 import { assignSlots, roleOf, type Slot } from '@/layout'
 import { clamp } from '@/bot/math'
@@ -29,6 +29,22 @@ const baseSize = ref(120)
 function measure() {
   const w = window.innerWidth
   baseSize.value = Math.max(96, Math.min(180, w * 0.14))
+}
+
+/** Summon bounce: her varışta sınıfı çevirip animasyonu yeniden tetikle. */
+const bounceKey = reactive<Record<string, number>>({})
+watch(
+  () => `${props.focusId ?? ''}|${props.allyIds.join(',')}|${props.companionIds.join(',')}`,
+  () => {
+    const arrived = [props.focusId, ...props.allyIds, ...props.companionIds].filter(
+      Boolean
+    ) as string[]
+    for (const id of arrived) bounceKey[id] = (bounceKey[id] ?? 0) + 1
+  }
+)
+
+function popClass(id: string) {
+  return (bounceKey[id] ?? 0) % 2 === 0 ? 'agent__pop--a' : 'agent__pop--b'
 }
 
 let raf = 0
@@ -139,21 +155,23 @@ function gazePoint() {
       :style="styleFor(agent, slots.get(agent.id)!)"
     >
       <div class="agent__blob" :style="blobStyle(slots.get(agent.id)!)">
-        <div class="agent__ground" :style="shadowStyle(slots.get(agent.id)!)" />
-        <div class="agent__glow" />
-        <BotAvatar
-          size="100%"
-          :shape="agent.shape"
-          :color="agent.color"
-          :expression="expressionFor(agent)"
-          :state="stateFor(agent)"
-          :paper="'#E8EDF7'"
-          :gaze-active="!!chatEngaged"
-          :gaze-x="gazePoint()?.x ?? null"
-          :gaze-y="gazePoint()?.y ?? null"
-          :gaze-down="agent.id === focusId && !!chatEngaged"
-          class="agent__svg"
-        />
+        <div class="agent__pop" :class="popClass(agent.id)">
+          <div class="agent__ground" :style="shadowStyle(slots.get(agent.id)!)" />
+          <div class="agent__glow" />
+          <BotAvatar
+            size="100%"
+            :shape="agent.shape"
+            :color="agent.color"
+            :expression="expressionFor(agent)"
+            :state="stateFor(agent)"
+            :paper="'#E8EDF7'"
+            :gaze-active="!!chatEngaged"
+            :gaze-x="gazePoint()?.x ?? null"
+            :gaze-y="gazePoint()?.y ?? null"
+            :gaze-down="agent.id === focusId && !!chatEngaged"
+            class="agent__svg"
+          />
+        </div>
       </div>
       <div class="agent__tag">
         <span class="agent__name">{{ agent.name }}</span>

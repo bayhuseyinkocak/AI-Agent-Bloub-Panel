@@ -4,6 +4,7 @@ import { AGENT_BY_ID, AGENTS, parseCommand, type AgentDef } from '@/agents'
 import type { StateId } from '@/bot/states'
 import AgentStage from '@/components/AgentStage.vue'
 import ChatDock, { type ChatMessage } from '@/components/ChatDock.vue'
+import DustField from '@/components/DustField.vue'
 
 const messages = ref<ChatMessage[]>([])
 const focusId = ref<string | null>(null)
@@ -139,6 +140,7 @@ function onSend(raw: string) {
 
 <template>
   <div class="floor">
+    <DustField />
     <AgentStage
       :focus-id="activeFocus"
       :ally-ids="activeRoster.allies"

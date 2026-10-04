@@ -79,7 +79,7 @@ export function assignSlots(input: LayoutInput): Map<string, Slot> {
     if (id === focusId) {
       slots.set(id, {
         x: 50 + jx * 0.3,
-        y: 78 + jy * 0.2,
+        y: 68 + jy * 0.2,
         scale: 2.15,
         z: 30,
         opacity: 1,
