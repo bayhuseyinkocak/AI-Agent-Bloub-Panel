@@ -17,9 +17,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [text: string]
-  /** seçilmiş (tam ad) ajanlar — lead adayı */
+  /** kesin seçilmiş ajanlar (Tab/Enter/tık) — lead adayı */
   preview: [ids: string[]]
-  /** filtre eşleşmesi — sahnede soft yaklaşım, lead değil */
+  /** filtre eşleşmesi — sahnede yavaş soft yaklaşım, lead değil */
   filter: [ids: string[]]
   /** input odağı — avatarlar chat’e baksın */
   engage: [on: boolean]
@@ -29,16 +29,17 @@ const draft = ref('')
 const listEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
 const highlight = ref(0)
+/** sadece Tab / Enter / tık ile eklenir — yazmak çağırmaz */
+const selectedIds = ref<string[]>([])
 
-/** Tam yazılmış `/ARIA` gibi token’lar = seçilmiş. Kısaltma (`/AR`) sayılmaz. */
-function exactIds(raw: string): string[] {
-  const ids: string[] = []
-  for (const part of raw.trim().split(/\s+/)) {
-    if (!part.startsWith('/') || part.length < 2) continue
-    const key = part.slice(1).toUpperCase()
-    if (AGENT_BY_ID.has(key) && !ids.includes(key)) ids.push(key)
-  }
-  return ids
+/** Taslakta tam `/ID` token’ı var mı (bitişik yazmak seçmez, sadece filtre dışlar). */
+function hasToken(raw: string, id: string): boolean {
+  return new RegExp(`(?:^|\\s)\\/${id}(?=\\s|$)`, 'i').test(raw)
+}
+
+/** Kesin seçim ∩ taslakta hâlâ duran mention. */
+function liveSelected(): string[] {
+  return selectedIds.value.filter((id) => hasToken(draft.value, id))
 }
 
 /** Son `/partial` — filtre listesi + soft eşleşmeler. */
@@ -50,29 +51,33 @@ const filterQuery = computed(() => {
 const suggestions = computed(() => {
   const q = filterQuery.value
   if (q === null) return []
-  const selected = new Set(exactIds(draft.value))
-  return AGENTS.filter((a) => a.id.startsWith(q) && !selected.has(a.id)).slice(0, 8)
+  const taken = new Set(liveSelected())
+  return AGENTS.filter((a) => a.id.startsWith(q) && !taken.has(a.id)).slice(0, 8)
 })
 
 watch(suggestions, () => {
   highlight.value = 0
 })
 
-watch(draft, (val) => {
-  emit('preview', exactIds(val))
+function emitState() {
+  emit('preview', liveSelected())
   emit('filter', suggestions.value.map((s) => s.id))
+}
+
+watch(draft, () => {
+  emitState()
 })
 
 function onInput(e: Event) {
   draft.value = (e.target as HTMLInputElement).value
 }
 
-/** Seçim: Tab / Enter (tek eşleşme) / listeden tık. */
+/** Seçim: Tab / Enter / listeden tık. Yazarak tamamlamak çağırmaz. */
 function applySuggestion(id: string) {
   draft.value = draft.value.replace(/\/[a-zA-Z]*$/, `/${id} `)
+  if (!selectedIds.value.includes(id)) selectedIds.value.push(id)
   inputEl.value?.focus()
-  emit('preview', exactIds(draft.value))
-  emit('filter', [])
+  emitState()
 }
 
 function submit() {
@@ -80,6 +85,7 @@ function submit() {
   if (!text) return
   emit('send', text)
   draft.value = ''
+  selectedIds.value = []
   emit('preview', [])
   emit('filter', [])
 }
@@ -98,13 +104,7 @@ function onKeydown(e: KeyboardEvent) {
     highlight.value = (highlight.value - 1 + list.length) % list.length
     return
   }
-  if (e.key === 'Tab') {
-    e.preventDefault()
-    applySuggestion((list[highlight.value] ?? list[0]!).id)
-    return
-  }
-  if (e.key === 'Enter') {
-    // filtre açıkken Enter her zaman seçimi kesinleştirir (göndermez)
+  if (e.key === 'Tab' || e.key === 'Enter') {
     e.preventDefault()
     applySuggestion((list[highlight.value] ?? list[0]!).id)
     return
@@ -112,8 +112,7 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     e.preventDefault()
     draft.value = draft.value.replace(/\/[a-zA-Z]*$/, '')
-    emit('preview', exactIds(draft.value))
-    emit('filter', [])
+    emitState()
   }
 }
 
@@ -147,8 +146,9 @@ function formatTs(ts: number) {
   <section class="chat" aria-label="AI chat" @pointerleave="onLeave">
     <div ref="listEl" class="chat__list">
       <p v-if="!messages.length" class="chat__empty">
-        <code>/</code> yaz, filtrele, <kbd>Tab</kbd> / <kbd>Enter</kbd> / tık ile seç.
-        Örnek: <code>/NOVA yeni bir isim bul</code>
+        <code>/</code> yaz, filtrele — isim benzerse liste daralır.
+        Seçim: <kbd>Tab</kbd> / <kbd>Enter</kbd> / tık. Örnek:
+        <code>/ARI</code> → ARIA mı ARIS mi?
       </p>
       <article
         v-for="m in messages"
@@ -189,7 +189,7 @@ function formatTs(ts: number) {
         type="text"
         autocomplete="off"
         spellcheck="false"
-        :placeholder="pendingHint || '/AGENT_ADI mesaj…'"
+        :placeholder="pendingHint || '/ yaz ve filtrele…'"
         aria-label="Mesaj veya agent komutu"
         @focus="onFocus"
         @blur="onBlur"

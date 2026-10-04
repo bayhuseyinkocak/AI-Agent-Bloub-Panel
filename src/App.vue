@@ -37,7 +37,7 @@ const pendingHint = computed(() => {
   const sticky = stickyMentions()
   const who = selected ?? sticky
   if (who.length) return `${who.join(' + ')} — serbest yazabilirsin, / ile değiştir`
-  return '/ yaz, filtrele, Tab ile seç'
+  return '/ARI… filtrele, Tab ile seç (ARIA mı ARIS mi?)'
 })
 
 const activeIds = computed(() => {
@@ -161,7 +161,7 @@ function onBusEvent(e: BusEvent) {
       break
 
     case 'agent.handoff': {
-      // sistem satırı: `ARIA → BLITZ: …` (isimler örnek — herkes herkese devredebilir)
+      // sistem satırı: `ARIA → ARIS: …` (isimler örnek — herkes herkese devredebilir)
       push({ from: 'system', text: `${e.from} → ${e.to}: ${e.task}` })
       if (focusId.value === e.to) break
       if (!allyIds.value.includes(e.to)) {

@@ -60,7 +60,7 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
 
   /**
    * Handoff hedefi — yetki yok, herkes herkese devredebilir.
-   * 1) kullanıcı net yazdı: `devret BLITZ` / `@BLITZ` / `→BLITZ`
+   * 1) kullanıcı net yazdı: `devret ARIS` / `@ARIS` / `→ARIS`
    * 2) konuşma cümlesi başka bir agent adı geçiyor (örnek isimler bağlayıcı değil)
    */
   function findHandoffTarget(

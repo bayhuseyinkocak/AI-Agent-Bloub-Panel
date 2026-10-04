@@ -23,26 +23,30 @@ No runtime dependencies beyond Vue.
 
 ## Agents
 
-| ID | Name | Skin | Style |
-|----|------|------|-------|
-| ARIA | Aria | Blue | Strategist, lead by default |
-| BLITZ | Blitz | Red | Executor, fast and direct |
-| SAGE | Sage | Green | Analyst, calm and measured |
-| NOVA | Nova | Purple | Researcher, exploratory |
-| ECHO | Echo | Cyan | Communicator, diplomatic |
-| HEX | Hex | Orange | Debugger, detail-focused |
-| PIXEL | Pixel | Yellow | Designer, visual thinker |
-| ORB | Orb | White | Oracle, broad perspective |
+Names share prefixes on purpose (`AR*` / `BL*` / `SA*` / `NO*`) so filter vs. selection is easy to test.
+
+| ID | Prefix | Role |
+|----|--------|------|
+| ARIA | AR | orkestrasyon |
+| ARIS | AR | analiz |
+| BLITZ | BL | uygulama |
+| BLIX | BL | hata ayıklama |
+| SAGE | SA | araştırma |
+| SARI | SA | doğrulama |
+| NOVA | NO | yaratıcı |
+| NORA | NO | tasarım |
 
 ## Chat commands
 
 | Command | What it does |
 |---------|--------------|
-| `/ARIA mesaj` | Summon ARIA as lead, send message |
-| `/ARIA /BLITZ mesaj` | Multi-summon: ARIA = lead, BLITZ = helper; pair forms automatically |
-| `/AR` (live typing) | Previews ARIA summon as you type (unique prefix match) |
-| `devret BLITZ` or `@BLITZ` (in message) | Handoff from current speaker to BLITZ |
-| `!pair side` / `!pair orbit` / `!pair` | Switch pair mode (yan yana / orbit) |
+| `/ARI` | Filter list (ARIA + ARIS). Soft drift on stage — **does not summon** |
+| `Tab` / `Enter` / click | Confirm selection → agent approaches as lead candidate |
+| `/ARIA mesaj` + send | Summon lead (works even without Tab; `parseCommand` on send) |
+| `/ARIA /ARIS mesaj` | Multi-summon: first = lead, rest = helper; pair forms |
+| Free text after summon | Sticky roster replies — no need to re-type `/` mentions |
+| `devret ARIS` or `@ARIS` | Handoff from current speaker to ARIS |
+| `!pair side` / `!pair orbit` / `!pair` | Switch pair mode |
 | Side menu → Ajanlar | Click an agent to summon |
 | Side menu → Ayarlar | Toggle pair mode via UI |
 

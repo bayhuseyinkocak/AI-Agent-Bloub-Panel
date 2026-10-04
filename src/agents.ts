@@ -19,6 +19,10 @@ export interface AgentDef {
   arriveState: StateId
 }
 
+/**
+ * İsimler kasıtlı olarak yakın önekli (AR* / BL* / SA* / NO*)
+ * — filtre ve seçim akışını test etmek için.
+ */
 export const AGENTS: AgentDef[] = [
   {
     id: 'ARIA',
@@ -27,15 +31,32 @@ export const AGENTS: AgentDef[] = [
     shape: 'cercle',
     color: 'bleu',
     expression: 'attentif',
-    partners: ['PIXEL', 'SAGE'],
+    partners: ['ARIS', 'SAGE'],
     replies: [
       'Buradayım. İşi parçalara bölüp ekibi toparlıyorum.',
-      'Talebi aldım. BLITZ uygulamaya, SAGE araştırmaya geçebilir.',
+      'Talebi aldım. BLITZ uygulamaya, ARIS analize geçebilir.',
       'Öncelik net: sen konuş, ben sıraya koyarım.'
     ],
     idleState: 'idle',
     thinkState: 'thinking',
     arriveState: 'exclaim'
+  },
+  {
+    id: 'ARIS',
+    name: 'ARIS',
+    role: 'analiz',
+    shape: 'galet',
+    color: 'vert',
+    expression: 'curieux',
+    partners: ['ARIA', 'SARI'],
+    replies: [
+      'Veriyi bölüyorum. Örüntü varsa çıkarırım.',
+      'Karşılaştırdım — kaynaklar tutarlı, ama bir boşluk var.',
+      'Analiz açık. Hangi soruya odaklanayım?'
+    ],
+    idleState: 'idle',
+    thinkState: 'thinking',
+    arriveState: 'wide'
   },
   {
     id: 'BLITZ',
@@ -44,7 +65,7 @@ export const AGENTS: AgentDef[] = [
     shape: 'goutte',
     color: 'rouge',
     expression: 'excite',
-    partners: ['HEX', 'ARIA'],
+    partners: ['BLIX', 'ARIA'],
     replies: [
       'Hızlı çözerim. Ne kırmamız gerekiyor?',
       'Hazırım — adımı söyle, fırlayayım.',
@@ -55,13 +76,30 @@ export const AGENTS: AgentDef[] = [
     arriveState: 'burst'
   },
   {
+    id: 'BLIX',
+    name: 'BLIX',
+    role: 'hata ayıklama',
+    shape: 'hexagone',
+    color: 'ambre',
+    expression: 'mefiant',
+    partners: ['BLITZ', 'ARIS'],
+    replies: [
+      'İzi sürüyorum. Kırık nokta bende.',
+      'Yeniden ürettim. Şimdi nedenini söylüyorum.',
+      'Düzeltme hazır; önce güvenlik kontrolü.'
+    ],
+    idleState: 'idle',
+    thinkState: 'alert',
+    arriveState: 'hexagon'
+  },
+  {
     id: 'SAGE',
     name: 'SAGE',
     role: 'araştırma',
-    shape: 'galet',
-    color: 'vert',
+    shape: 'squircle',
+    color: 'violet',
     expression: 'somnolent',
-    partners: ['ECHO', 'ARIA'],
+    partners: ['SARI', 'ARIA'],
     replies: [
       'Kaynaklara bakıyorum… bir saniye, derinleşiyorum.',
       'Ağır ağır, doğru cevap. Ne merak ediyorsun?',
@@ -72,13 +110,30 @@ export const AGENTS: AgentDef[] = [
     arriveState: 'wide'
   },
   {
+    id: 'SARI',
+    name: 'SARI',
+    role: 'doğrulama',
+    shape: 'capsule',
+    color: 'turquoise',
+    expression: 'fier',
+    partners: ['SAGE', 'BLIX'],
+    replies: [
+      'Kontrol ettim. Onaylıyorum ya da düzeltiyorum.',
+      'Şu kısım sağlam, şu kısım riskli.',
+      'Doğrulama bitti. İmzalıyorum.'
+    ],
+    idleState: 'idle',
+    thinkState: 'wink',
+    arriveState: 'notify'
+  },
+  {
     id: 'NOVA',
     name: 'NOVA',
     role: 'yaratıcı',
-    shape: 'squircle',
-    color: 'violet',
+    shape: 'nuage',
+    color: 'rose',
     expression: 'surpris',
-    partners: ['ORB', 'PIXEL'],
+    partners: ['NORA', 'ARIS'],
     replies: [
       'Yeni bir açı var sanki… deneyelim mi?',
       'Fikir uçuşuyor. Bana bir yön ver, patlatayım.',
@@ -89,47 +144,13 @@ export const AGENTS: AgentDef[] = [
     arriveState: 'exclaim'
   },
   {
-    id: 'ECHO',
-    name: 'ECHO',
-    role: 'iletişim',
-    shape: 'capsule',
-    color: 'turquoise',
-    expression: 'curieux',
-    partners: ['SAGE', 'ARIA'],
-    replies: [
-      'Duydum. Mesajı net ve sade geri veririm.',
-      'Kim ne demişti? Özet geçeyim.',
-      'Kanal açık. Kime ne ileteyim?'
-    ],
-    idleState: 'idle',
-    thinkState: 'wink',
-    arriveState: 'notify'
-  },
-  {
-    id: 'HEX',
-    name: 'HEX',
-    role: 'güvenlik',
-    shape: 'hexagone',
-    color: 'ambre',
-    expression: 'mefiant',
-    partners: ['BLITZ', 'ORB'],
-    replies: [
-      'Bir kez daha bakayım. Risk sever değilim.',
-      'Bu yol kapalı olabilir. Alternatif önereyim.',
-      'Kontrol listesi hazır. Emin olmadan geçmem.'
-    ],
-    idleState: 'idle',
-    thinkState: 'alert',
-    arriveState: 'hexagon'
-  },
-  {
-    id: 'PIXEL',
-    name: 'PIXEL',
+    id: 'NORA',
+    name: 'NORA',
     role: 'tasarım',
-    shape: 'nuage',
-    color: 'rose',
+    shape: 'triangle',
+    color: 'orange',
     expression: 'heureux',
-    partners: ['ARIA', 'NOVA'],
+    partners: ['NOVA', 'BLITZ'],
     replies: [
       'Formu yumuşatırım, ritmi de.',
       'Görsel dil ne olsun? Birlikte karar verelim.',
@@ -137,23 +158,6 @@ export const AGENTS: AgentDef[] = [
     ],
     idleState: 'idle',
     thinkState: 'play',
-    arriveState: 'wide'
-  },
-  {
-    id: 'ORB',
-    name: 'ORB',
-    role: 'operasyon',
-    shape: 'triangle',
-    color: 'orange',
-    expression: 'fier',
-    partners: ['HEX', 'NOVA'],
-    replies: [
-      'Sistem ayakta. Sıradaki adım ne?',
-      'Akışı izliyorum, tıkanma yok.',
-      'Devreye giriyorum. Bırak işleyeyim.'
-    ],
-    idleState: 'idle',
-    thinkState: 'comet',
     arriveState: 'play'
   }
 ]
@@ -164,7 +168,7 @@ export function findAgent(token: string): AgentDef | undefined {
   return AGENT_BY_ID.get(token.trim().toUpperCase())
 }
 
-/** `/ARIA /PIXEL merhaba` → { ids: ['ARIA','PIXEL'], text: 'merhaba' } */
+/** `/ARIA /ARIS merhaba` → { ids: ['ARIA','ARIS'], text: 'merhaba' } */
 export function parseCommand(raw: string): { ids: string[]; text: string; unknown: string[] } {
   const ids: string[] = []
   const unknown: string[] = []

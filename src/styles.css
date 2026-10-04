@@ -120,6 +120,10 @@ code {
   transition: width 0.85s cubic-bezier(0.22, 1, 0.36, 1), height 0.85s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.agent--soft .agent__blob {
+  transition: width 1.8s cubic-bezier(0.22, 1, 0.36, 1), height 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .agent__pop {
   position: relative;
   width: 100%;
@@ -266,14 +270,25 @@ code {
   opacity: 0.55;
 }
 
-/* filtre eşleşmesi — soft yaklaşım (lead değil) */
+/* filtre eşleşmesi — “belki çağıracaklar” yumuşak parıltı */
 .agent--soft {
   filter: none;
+  animation: soft-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes soft-breathe {
+  0%,
+  100% {
+    filter: none;
+  }
+  50% {
+    filter: brightness(1.08);
+  }
 }
 
 .agent--soft .agent__glow {
-  opacity: 0.65;
-  background: radial-gradient(circle, rgba(91, 140, 255, 0.35), transparent 70%);
+  opacity: 0.7;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.4), transparent 70%);
 }
 
 .agent--soft .agent__name {

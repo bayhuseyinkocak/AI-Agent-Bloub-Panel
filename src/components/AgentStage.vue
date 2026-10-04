@@ -115,10 +115,10 @@ onUnmounted(() => {
   window.removeEventListener('resize', measure)
 })
 
-function floatFor(id: string, t: number) {
+function floatFor(id: string, t: number, damp = 1) {
   const a = id.charCodeAt(0) * 0.13 + id.charCodeAt(1) * 0.07
-  const dx = Math.sin(t * 0.55 + a) * 6
-  const dy = Math.cos(t * 0.42 + a * 1.3) * 5
+  const dx = Math.sin(t * 0.55 + a) * 6 * damp
+  const dy = Math.cos(t * 0.42 + a * 1.3) * 5 * damp
   return `translate(${dx}px, ${dy}px)`
 }
 
@@ -163,16 +163,17 @@ function expressionFor(agent: AgentDef) {
     if (snapFront.value) return 'surpris' // yeni karsiya döndü
     return 'attentif' // karsiya / kameraya
   }
-  // yanlar: kendi ifadelerini koru (toplu surpris + bakış = göz kaybı hissi)
+  // filtre: “beni mi çağıracaklar?” — meraklı, chat’e dönük
+  if (isSoft(agent)) return 'curieux'
   return agent.expression
 }
 
 function gazeModeFor(agent: AgentDef): 'chat' | 'front' | null {
-  // odak: chat’te chat’e, dışarıda kameraya
   if (agent.id === props.focusId) {
     return props.chatEngaged ? 'chat' : 'front'
   }
-  // yanlar: sohbet dışında hafif kamera bakışı
+  // filtredeki ajanlar chat’e bakar (çağrı hissi)
+  if (isSoft(agent)) return 'chat'
   return props.chatEngaged ? null : 'front'
 }
 
@@ -185,28 +186,33 @@ function isSoft(agent: AgentDef) {
 
 function styleFor(agent: AgentDef, slot: Slot) {
   const soft = isSoft(agent)
-  // filtre eşleşmesi: biraz yaklaş / büyür — ama lead slotuna gelmez
-  const softMul = soft ? 1.28 : 1
+  // filtre: yavaşça chat’e doğru — lead slotuna gelmez
+  const softMul = soft ? 1.32 : 1
   const size = baseSize.value * slot.scale * softMul
   const blur = depthBlur(slot)
-  const lean = props.chatEngaged ? clamp((50 - slot.x) * 0.1, -5, 5) : 0
-  const softDx = soft ? (50 - slot.x) * 0.07 : 0
-  const softDy = soft ? (62 - slot.y) * 0.05 : 0
+  const lean = props.chatEngaged || soft ? clamp((50 - slot.x) * 0.1, -5, 5) : 0
+  // belirgin drift: köşeden ortaya / chat’e doğru
+  const softDx = soft ? (50 - slot.x) * 0.22 : 0
+  const softDy = soft ? (72 - slot.y) * 0.18 : 0
+  const softZ = soft ? 72 : 0
+  const t = soft
+    ? 'left 2.2s cubic-bezier(.22,1,.36,1), top 2.2s cubic-bezier(.22,1,.36,1), width 1.8s cubic-bezier(.22,1,.36,1), opacity 1.1s ease, filter .8s ease, transform 1.8s cubic-bezier(.22,1,.36,1)'
+    : 'left .85s cubic-bezier(.22,1,.36,1), top .85s cubic-bezier(.22,1,.36,1), width .75s cubic-bezier(.22,1,.36,1), opacity .55s ease, filter .7s ease, transform .55s cubic-bezier(.22,1,.36,1)'
   return {
-    left: `calc(${slot.x}% + ${softDx}%)`,
-    top: `calc(${slot.y}% + ${softDy}%)`,
-    zIndex: slot.z + (soft ? 4 : 0),
-    opacity: Math.min(1, slot.opacity + (soft ? 0.22 : 0)),
+    left: `${slot.x + softDx}%`,
+    top: `${slot.y + softDy}%`,
+    zIndex: slot.z + (soft ? 6 : 0),
+    opacity: Math.min(1, slot.opacity + (soft ? 0.28 : 0)),
     width: `${size}px`,
-    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d + (soft ? 36 : 0)}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value)}`,
+    transform: `translate(-50%, -50%) translate3d(0, 0, ${slot.z3d + softZ}px) rotate(${lean}deg) ${floatFor(agent.id, drift.value, soft ? 0.35 : 1)}`,
     filter: blur ? `blur(${blur}px)` : undefined,
-    transition:
-      'left .75s cubic-bezier(.22,1,.36,1), top .75s cubic-bezier(.22,1,.36,1), width .7s cubic-bezier(.22,1,.36,1), opacity .45s ease, filter .7s ease, transform .55s cubic-bezier(.22,1,.36,1)'
+    transition: t
   }
 }
 
-function blobStyle(slot: Slot) {
-  const size = baseSize.value * slot.scale
+function blobStyle(slot: Slot, agent: AgentDef) {
+  const soft = isSoft(agent)
+  const size = baseSize.value * slot.scale * (soft ? 1.32 : 1)
   return { width: `${size}px`, height: `${size}px` }
 }
 
@@ -225,9 +231,11 @@ function shadowStyle(slot: Slot) {
 }
 
 /** Chat panelinin “bakılan” noktası — input satırı. */
-function gazePoint() {
-  if (!props.chatEngaged) return null
-  return { x: window.innerWidth / 2, y: window.innerHeight - 78 }
+function gazePointFor(agent: AgentDef) {
+  const target = { x: window.innerWidth / 2, y: window.innerHeight - 78 }
+  if (isSoft(agent)) return target
+  if (props.chatEngaged && agent.id === props.focusId) return target
+  return null
 }
 </script>
 
@@ -258,7 +266,7 @@ function gazePoint() {
       ]"
       :style="styleFor(agent, slots.get(agent.id)!)"
     >
-      <div class="agent__blob" :style="blobStyle(slots.get(agent.id)!)">
+      <div class="agent__blob" :style="blobStyle(slots.get(agent.id)!, agent)">
         <div class="agent__pop" :class="popClass(agent.id)">
           <div class="agent__ground" :style="shadowStyle(slots.get(agent.id)!)" />
           <div class="agent__glow" />
@@ -269,9 +277,9 @@ function gazePoint() {
             :expression="expressionFor(agent)"
             :state="stateFor(agent)"
             :paper="'#E8EDF7'"
-            :gaze-active="!!chatEngaged && agent.id === focusId"
-            :gaze-x="gazePoint()?.x ?? null"
-            :gaze-y="gazePoint()?.y ?? null"
+            :gaze-active="!!gazePointFor(agent)"
+            :gaze-x="gazePointFor(agent)?.x ?? null"
+            :gaze-y="gazePointFor(agent)?.y ?? null"
             :gaze-down="agent.id === focusId && !!chatEngaged"
             :gaze-mode="gazeModeFor(agent)"
             :gaze-soft="agent.id !== focusId"
