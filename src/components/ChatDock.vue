@@ -17,10 +17,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [text: string]
-  /** kesin seçilmiş ajanlar (Tab/Enter/tık) — lead adayı */
+  /** kesin seçilmiş ajanlar (Tab/Enter/tık) — merkezde bekleme */
   preview: [ids: string[]]
-  /** filtre eşleşmesi — sahnede yavaş soft yaklaşım, lead değil */
-  filter: [ids: string[]]
+  /** filtre pull 0–1 — yazdıkça ortaya yaklaşma */
+  filter: [pulls: Record<string, number>]
   /** input odağı — avatarlar chat’e baksın */
   engage: [on: boolean]
 }>()
@@ -42,7 +42,7 @@ function liveSelected(): string[] {
   return selectedIds.value.filter((id) => hasToken(draft.value, id))
 }
 
-/** Son `/partial` — filtre listesi + soft eşleşmeler. */
+/** Son `/partial` — filtre listesi + kademeli pull. */
 const filterQuery = computed(() => {
   const m = draft.value.match(/\/([a-zA-Z]*)$/)
   return m ? (m[1] ?? '').toUpperCase() : null
@@ -55,13 +55,32 @@ const suggestions = computed(() => {
   return AGENTS.filter((a) => a.id.startsWith(q) && !taken.has(a.id)).slice(0, 8)
 })
 
+/**
+ * Pull = ne kadar özgül eşleşme. `/A` → 0.3, `/AR` → 0.45, `/ARIA` (tam) → 1.
+ * Tam ad yazılmış ama seçilmemiş olan ortada; sadece önek tutan geri çekilir.
+ */
+function computePulls(query: string | null, selected: string[]): Record<string, number> {
+  const pulls: Record<string, number> = {}
+  if (!query || query.length < 1) return pulls
+  for (const a of AGENTS) {
+    if (selected.includes(a.id)) continue
+    if (!a.id.startsWith(query)) continue
+    const specific = query.length / a.id.length
+    const exact = query === a.id ? 1 : 0
+    const pull = Math.min(1, 0.18 + specific * 0.5 + exact * 0.4)
+    pulls[a.id] = pull
+  }
+  return pulls
+}
+
 watch(suggestions, () => {
   highlight.value = 0
 })
 
 function emitState() {
-  emit('preview', liveSelected())
-  emit('filter', suggestions.value.map((s) => s.id))
+  const selected = liveSelected()
+  emit('preview', selected)
+  emit('filter', computePulls(filterQuery.value, selected))
 }
 
 watch(draft, () => {
@@ -72,7 +91,7 @@ function onInput(e: Event) {
   draft.value = (e.target as HTMLInputElement).value
 }
 
-/** Seçim: Tab / Enter / listeden tık. Yazarak tamamlamak çağırmaz. */
+/** Seçim: Tab / Enter / listeden tık → bekleme yuvası. */
 function applySuggestion(id: string) {
   draft.value = draft.value.replace(/\/[a-zA-Z]*$/, `/${id} `)
   if (!selectedIds.value.includes(id)) selectedIds.value.push(id)
@@ -87,7 +106,7 @@ function submit() {
   draft.value = ''
   selectedIds.value = []
   emit('preview', [])
-  emit('filter', [])
+  emit('filter', {})
 }
 
 function onKeydown(e: KeyboardEvent) {

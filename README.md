@@ -40,10 +40,10 @@ Names share prefixes on purpose (`AR*` / `BL*` / `SA*` / `NO*`) so filter vs. se
 
 | Command | What it does |
 |---------|--------------|
-| `/ARI` | Filter list (ARIA + ARIS). Soft drift on stage — **does not summon** |
-| `Tab` / `Enter` / click | Confirm selection → agent approaches as lead candidate |
-| `/ARIA mesaj` + send | Summon lead (works even without Tab; `parseCommand` on send) |
-| `/ARIA /ARIS mesaj` | Multi-summon: first = lead, rest = helper; pair forms |
+| `/A` → `/AR` → `/ARI` | Progressive filter pull: matches grow and drift toward center as the name gets more specific |
+| `/ARIA` (typed, not selected) | ARIA at screen center; prefix-only matches (ARIS) recede |
+| `Tab` / `Enter` / click | Confirm → agent holds at a wait slot (near center, toward chat). More picks allowed |
+| Send | Confirmed agents land closest to the chat (focus + helpers) |
 | Free text after summon | Sticky roster replies — no need to re-type `/` mentions |
 | `devret ARIS` or `@ARIS` | Handoff from current speaker to ARIS |
 | `!pair side` / `!pair orbit` / `!pair` | Switch pair mode |

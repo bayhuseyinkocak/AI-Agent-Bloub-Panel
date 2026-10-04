@@ -120,8 +120,20 @@ code {
   transition: width 0.85s cubic-bezier(0.22, 1, 0.36, 1), height 0.85s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.agent--soft .agent__blob {
-  transition: width 1.8s cubic-bezier(0.22, 1, 0.36, 1), height 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+.agent--soft .agent__blob,
+.agent--wait .agent__blob {
+  transition: width 1s cubic-bezier(0.22, 1, 0.36, 1), height 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* kesin seçim — merkezde bekleme */
+.agent--wait .agent__glow {
+  opacity: 0.95;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.45), transparent 70%);
+}
+
+.agent--wait .agent__name {
+  color: var(--accent);
+  font-size: 13px;
 }
 
 .agent__pop {

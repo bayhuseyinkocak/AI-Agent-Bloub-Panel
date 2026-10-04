@@ -13,10 +13,10 @@ const messages = ref<ChatMessage[]>([])
 const focusId = ref<string | null>(null)
 const allyIds = ref<string[]>([])
 const companionIds = ref<string[]>([])
-/** yazarken seçilmiş (tam ad) ajanlar; null = boşta */
-const previewIds = ref<string[] | null>(null)
-/** filtre eşleşmesi — soft yaklaşım, lead değil */
-const filterIds = ref<string[]>([])
+/** Tab/Enter/tık ile kesinleşenler — merkezde bekler */
+const selectedIds = ref<string[]>([])
+/** filtre pull 0–1 — yazdıkça ortaya */
+const filterPulls = ref<Record<string, number>>({})
 const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
@@ -33,23 +33,28 @@ function stickyMentions(): string[] {
 }
 
 const pendingHint = computed(() => {
-  const selected = previewIds.value?.length ? previewIds.value : null
+  const sel = selectedIds.value
   const sticky = stickyMentions()
-  const who = selected ?? sticky
+  const who = sel.length ? sel : sticky
+  if (sel.length) return `${sel.join(' + ')} seçildi — mesaj yaz, birden fazla da seçebilirsin`
   if (who.length) return `${who.join(' + ')} — serbest yazabilirsin, / ile değiştir`
   return '/ARI… filtrele, Tab ile seç (ARIA mı ARIS mi?)'
 })
 
 const activeIds = computed(() => {
-  if (previewIds.value?.length) return previewIds.value
+  if (selectedIds.value.length) return selectedIds.value
+  if (Object.keys(filterPulls.value).length) return Object.keys(filterPulls.value)
   if (focusId.value) return [focusId.value, ...allyIds.value]
   return []
 })
 
-const activeFocus = computed(() => activeIds.value[0] ?? null)
+const activeFocus = computed(() => focusId.value)
 
 const activeRoster = computed(() => {
-  const ids = activeIds.value
+  if (selectedIds.value.length || Object.keys(filterPulls.value).length) {
+    return { allies: [] as string[], companions: [] as string[] }
+  }
+  const ids = focusId.value ? [focusId.value, ...allyIds.value] : []
   if (!ids.length) return { allies: [] as string[], companions: [] as string[] }
   return resolveRoster(ids[0]!, ids.slice(1))
 })
@@ -76,21 +81,17 @@ function push(msg: Omit<ChatMessage, 'id' | 'ts'>) {
 }
 
 function onPreview(ids: string[]) {
-  if (!ids.length) {
-    previewIds.value = null
-    return
-  }
   const next = ids.join(',')
-  const prev = previewIds.value?.join(',') ?? ''
-  previewIds.value = ids
-  // seçim netleşince hafif “fark ettim” — filtre / unique prefix ile değil
-  if (next !== prev && !focusId.value) {
-    flashState(ids[0]!, AGENT_BY_ID.get(ids[0]!)!.arriveState, 500)
+  const prev = selectedIds.value.join(',')
+  selectedIds.value = ids
+  if (next !== prev && ids.length && next.split(',').length > prev.split(',').filter(Boolean).length) {
+    const added = ids.find((id) => !prev.includes(id))
+    if (added) flashState(added, AGENT_BY_ID.get(added)?.arriveState ?? 'exclaim', 450)
   }
 }
 
-function onFilter(ids: string[]) {
-  filterIds.value = ids
+function onFilter(pulls: Record<string, number>) {
+  filterPulls.value = pulls
 }
 
 function onEngage(on: boolean) {
@@ -113,8 +114,8 @@ function onBusEvent(e: BusEvent) {
   switch (e.type) {
     case 'user.message':
       push({ from: 'you', text: e.text })
-      previewIds.value = null
-      filterIds.value = []
+      selectedIds.value = []
+      filterPulls.value = {}
       break
 
     case 'agent.called': {
@@ -186,8 +187,8 @@ function onSend(raw: string) {
     const next = pairCmd[1]?.toLowerCase() as PairMode | undefined
     const mode = next ? (setPairMode(next), next) : togglePairMode()
     push({ from: 'you', text: raw })
-    previewIds.value = null
-    filterIds.value = []
+    selectedIds.value = []
+    filterPulls.value = {}
     push({ from: 'system', text: `Pair modu: ${mode}${mode === 'side' ? ' (yan yana)' : ' (orbit + bağ)'}` })
     if (pair.value) {
       pair.value = { ...pair.value, mode }
@@ -203,8 +204,8 @@ function onSend(raw: string) {
 
   if (unknown.length) {
     push({ from: 'you', text: raw })
-    previewIds.value = null
-    filterIds.value = []
+    selectedIds.value = []
+    filterPulls.value = {}
     push({
       from: 'system',
       text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${AGENTS.map((a) => a.id).join(', ')}`
@@ -216,7 +217,8 @@ function onSend(raw: string) {
     // yapışkan kadro: mention yoksa son summon’daki ajanlara gider
     const sticky = stickyMentions()
     if (sticky.length && text) {
-      previewIds.value = null
+      selectedIds.value = []
+      filterPulls.value = {}
       bus.dispatch({
         type: 'user.message',
         text,
@@ -225,8 +227,8 @@ function onSend(raw: string) {
       return
     }
     push({ from: 'you', text: raw })
-    previewIds.value = null
-    filterIds.value = []
+    selectedIds.value = []
+    filterPulls.value = {}
     push({
       from: 'system',
       text: sticky.length
@@ -237,8 +239,8 @@ function onSend(raw: string) {
   }
 
   // tek iş satırı, çok agent — lead/helpers bus’tan gelir
-  previewIds.value = null
-  filterIds.value = []
+  selectedIds.value = []
+  filterPulls.value = {}
   bus.dispatch({
     type: 'user.message',
     text: text || raw,
@@ -272,7 +274,8 @@ onUnmounted(() => {
       :pair="pair"
       :states="states"
       :chat-engaged="chatEngaged"
-      :filter-ids="filterIds"
+      :selected-ids="selectedIds"
+      :filter-pulls="filterPulls"
     />
     <ChatDock
       :messages="messages"
