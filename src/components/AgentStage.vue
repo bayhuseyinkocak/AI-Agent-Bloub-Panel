@@ -139,8 +139,7 @@ function expressionFor(agent: AgentDef) {
     if (snapFront.value) return 'surpris' // yeni karsiya döndü
     return 'attentif' // karsiya / kameraya
   }
-  // yanlar: chat’ten çıkınca kısa Surprised, normalde kendi ifadesi
-  if (snapFront.value && !props.chatEngaged) return 'surpris'
+  // yanlar: kendi ifadelerini koru (toplu surpris + bakış = göz kaybı hissi)
   return agent.expression
 }
 
