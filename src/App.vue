@@ -125,7 +125,20 @@ function onBusEvent(e: BusEvent) {
       states[e.agentId] = AGENT_BY_ID.get(e.agentId)?.idleState ?? 'idle'
       break
 
-    // handoff / pair — Faz 3–4
+    case 'agent.handoff': {
+      // sistem satırı: `ARIA → BLITZ: …` (isimler örnek — herkes herkese devredebilir)
+      push({ from: 'system', text: `${e.from} → ${e.to}: ${e.task}` })
+      if (focusId.value === e.to) break
+      if (!allyIds.value.includes(e.to)) {
+        allyIds.value = [...allyIds.value, e.to]
+        const { companions } = resolveRoster(focusId.value ?? e.from, allyIds.value)
+        companionIds.value = companions
+        flashState(e.to, AGENT_BY_ID.get(e.to)?.arriveState ?? 'exclaim', 700)
+      }
+      break
+    }
+
+    // pair — Faz 4
     default:
       break
   }

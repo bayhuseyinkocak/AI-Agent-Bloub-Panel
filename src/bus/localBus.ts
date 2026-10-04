@@ -1,4 +1,4 @@
-import { AGENT_BY_ID, parseCommand } from '@/agents'
+import { AGENTS, AGENT_BY_ID, parseCommand } from '@/agents'
 import type { StateId } from '@/bot/states'
 import type {
   AgentBus,
@@ -44,12 +44,68 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     return AGENT_BY_ID.get(agentId)?.idleState ?? 'idle'
   }
 
+  function arriveState(agentId: AgentId): StateId {
+    return AGENT_BY_ID.get(agentId)?.arriveState ?? 'exclaim'
+  }
+
   function pickReply(agentId: AgentId, userText: string): string {
     const agent = AGENT_BY_ID.get(agentId)
     if (!agent) return `${agentId} sahnede.`
     if (!userText) return `${agent.name} sahneye geldim. Ne yapmamı istersin?`
     const hash = userText.length + agent.id.length
     return agent.replies[hash % agent.replies.length]!
+  }
+
+  /**
+   * Handoff hedefi — yetki yok, herkes herkese devredebilir.
+   * 1) kullanıcı net yazdı: `devret BLITZ` / `@BLITZ` / `→BLITZ`
+   * 2) konuşma cümlesi başka bir agent adı geçiyor (örnek isimler bağlayıcı değil)
+   */
+  function findHandoffTarget(
+    speaker: AgentId,
+    userText: string,
+    sayText: string
+  ): AgentId | null {
+    const explicit = userText.match(/(?:devret|devrediyorum|handoff|@|→)\s*\/?([A-Za-z]{2,})/i)
+    if (explicit) {
+      const id = explicit[1]!.toUpperCase()
+      if (AGENT_BY_ID.has(id) && id !== speaker) return id
+    }
+    for (const agent of AGENTS) {
+      if (agent.id === speaker) continue
+      if (new RegExp(`\\b${agent.id}\\b`, 'i').test(sayText)) return agent.id
+    }
+    return null
+  }
+
+  /** Tek tur: konuşur, gerekirse handoff açar (her agent için). */
+  function runTurn(
+    agentId: AgentId,
+    userText: string,
+    task: string,
+    delay: number,
+    chained: boolean
+  ): void {
+    later(delay, () => {
+      emit({ type: 'agent.thinking', agentId, state: thinkState(agentId) })
+      const sayText = pickReply(agentId, userText)
+
+      later(350, () => {
+        emit({ type: 'agent.say', agentId, text: sayText })
+        emit({ type: 'agent.thinking', agentId, state: idleState(agentId) })
+        emit({ type: 'agent.done', agentId })
+
+        if (chained) return
+        const target = findHandoffTarget(agentId, userText, sayText)
+        if (!target) return
+
+        later(180, () => {
+          emit({ type: 'agent.handoff', from: agentId, to: target, task })
+          emit({ type: 'agent.thinking', agentId: target, state: arriveState(target) })
+          runTurn(target, userText, task, 420, true)
+        })
+      })
+    })
   }
 
   /** Tek iş satırı, çok agent: ilk mention lead, diğerleri helper. */
@@ -61,23 +117,10 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     const helpers = mentions.slice(1)
     emit({ type: 'agent.called', lead, helpers })
 
-    later(200, () => {
-      emit({ type: 'agent.thinking', agentId: lead, state: thinkState(lead) })
-    })
-
-    later(550, () => {
-      emit({ type: 'agent.say', agentId: lead, text: pickReply(lead, text) })
-      emit({ type: 'agent.thinking', agentId: lead, state: idleState(lead) })
-      emit({ type: 'agent.done', agentId: lead })
-    })
+    runTurn(lead, text, text, 200, false)
 
     helpers.forEach((id, i) => {
-      later(700 + i * 180, () => {
-        emit({ type: 'agent.thinking', agentId: id, state: thinkState(id) })
-        emit({ type: 'agent.say', agentId: id, text: `${id} yanındayım.` })
-        emit({ type: 'agent.thinking', agentId: id, state: idleState(id) })
-        emit({ type: 'agent.done', agentId: id })
-      })
+      runTurn(id, text, text, 700 + i * 180, false)
     })
   }
 
