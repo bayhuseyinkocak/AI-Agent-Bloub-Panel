@@ -10,3 +10,4 @@ export type {
 } from './types'
 export { isBusEvent } from './types'
 export { createLocalBus, type LocalBusOptions } from './localBus'
+export { createBackendBus, type BackendBusOptions } from './backendBus'
