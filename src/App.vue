@@ -84,6 +84,13 @@ function onEngage(on: boolean) {
   chatEngaged.value = on
 }
 
+/** Sahne boşluğuna tıkla → chat’ten çık, odak karsiya baksın. */
+function onFloorPointer(e: PointerEvent) {
+  const t = e.target as HTMLElement | null
+  if (t?.closest('.chat')) return
+  chatEngaged.value = false
+}
+
 function onSend(raw: string) {
   const { ids, text, unknown } = parseCommand(raw)
 
@@ -139,7 +146,7 @@ function onSend(raw: string) {
 </script>
 
 <template>
-  <div class="floor">
+  <div class="floor" @pointerdown="onFloorPointer">
     <DustField />
     <AgentStage
       :focus-id="activeFocus"

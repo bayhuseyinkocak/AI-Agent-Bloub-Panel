@@ -128,18 +128,18 @@ code {
   will-change: transform;
 }
 
-/* Summon bounce: hafif aşma + yaylanma (oyun juice, kısa) */
+/* Summon bounce: sert/oyun juice — kısa, belirgin aşma */
 @keyframes summon-a {
   0% {
-    transform: translateY(30px) scale(0.7);
-    opacity: 0.55;
+    transform: translateY(36px) scale(0.62);
+    opacity: 0.4;
   }
-  55% {
-    transform: translateY(-12px) scale(1.08);
+  48% {
+    transform: translateY(-14px) scale(1.14);
     opacity: 1;
   }
-  78% {
-    transform: translateY(4px) scale(0.96);
+  72% {
+    transform: translateY(5px) scale(0.94);
   }
   100% {
     transform: translateY(0) scale(1);
@@ -148,15 +148,15 @@ code {
 
 @keyframes summon-b {
   0% {
-    transform: translateY(30px) scale(0.7);
-    opacity: 0.55;
+    transform: translateY(36px) scale(0.62);
+    opacity: 0.4;
   }
-  55% {
-    transform: translateY(-12px) scale(1.08);
+  48% {
+    transform: translateY(-14px) scale(1.14);
     opacity: 1;
   }
-  78% {
-    transform: translateY(4px) scale(0.96);
+  72% {
+    transform: translateY(5px) scale(0.94);
   }
   100% {
     transform: translateY(0) scale(1);
@@ -164,11 +164,11 @@ code {
 }
 
 .agent__pop--a {
-  animation: summon-a 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: summon-a 0.38s cubic-bezier(0.22, 1.4, 0.36, 1) both;
 }
 
 .agent__pop--b {
-  animation: summon-b 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: summon-b 0.38s cubic-bezier(0.22, 1.4, 0.36, 1) both;
 }
 
 .agent__ground {

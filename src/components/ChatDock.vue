@@ -81,7 +81,12 @@ function onFocus() {
 }
 
 function onBlur() {
-  emit('engage', draft.value.trim().length > 0)
+  // chat’ten çık / başka yere tıkla → karsiya bakış
+  emit('engage', false)
+}
+
+function onLeave() {
+  if (document.activeElement !== inputEl.value) emit('engage', false)
 }
 
 watch(
@@ -99,7 +104,7 @@ function formatTs(ts: number) {
 </script>
 
 <template>
-  <section class="chat" aria-label="AI chat">
+  <section class="chat" aria-label="AI chat" @pointerleave="onLeave">
     <div ref="listEl" class="chat__list">
       <p v-if="!messages.length" class="chat__empty">
         Agent çağırmak için <code>/ARIA</code> gibi bir komut yaz. Örnek:

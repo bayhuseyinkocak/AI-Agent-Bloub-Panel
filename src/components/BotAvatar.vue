@@ -6,7 +6,7 @@ import { mixHex, COLOR_BY_ID, DEFAULT_COLOR, DEFAULT_SHAPE, SHAPE_BY_ID } from '
 import { DEFAULT_EXPRESSION, EXPRESSION_BY_ID } from '@/bot/expressions'
 import { DEMI_VIEWBOX, RAYON } from '@/bot/repere'
 import { STATE_BY_ID, type StateId } from '@/bot/states'
-import { lookTarget, tourEase, TURN_TIME } from '@/ui/gaze'
+import { lookFront, lookTarget, tourEase, TURN_TIME } from '@/ui/gaze'
 import { clamp } from '@/bot/math'
 
 const props = withDefaults(
@@ -23,6 +23,10 @@ const props = withDefaults(
     gazeActive?: boolean
     /** odak avatar: chat’e doğru ekstra aşağı bakış */
     gazeDown?: boolean
+    /** 'chat' = chat’e, 'front' = karsiya/kameraya, yok = ifade bakışı */
+    gazeMode?: 'chat' | 'front' | null
+    /** yanlar için yumuşak kamera bakışı */
+    gazeSoft?: boolean
   }>(),
   {
     size: 120,
@@ -34,7 +38,9 @@ const props = withDefaults(
     gazeX: null,
     gazeY: null,
     gazeActive: false,
-    gazeDown: false
+    gazeDown: false,
+    gazeMode: null,
+    gazeSoft: false
   }
 )
 
@@ -58,9 +64,26 @@ let aiming = false
 let turnSince = 0
 
 function applyGaze() {
-  const active = props.gazeActive && props.gazeX != null && props.gazeY != null
   const faceOk = STATE_BY_ID.get(props.state)?.baseFace !== false
-  if (!active || !faceOk) {
+  if (!faceOk) {
+    if (aiming) {
+      engine.setLook(null, clock, TURN_TIME)
+      aiming = false
+    }
+    return
+  }
+
+  // karsiya / kameraya bakış
+  if (props.gazeMode === 'front') {
+    if (!aiming) turnSince = clock
+    engine.setLook(lookFront(tourEase(clock - turnSince), props.gazeSoft), clock, props.gazeSoft ? 0.55 : 0.4)
+    aiming = true
+    return
+  }
+
+  const chatMode = props.gazeMode === 'chat' || props.gazeActive
+  const active = chatMode && props.gazeX != null && props.gazeY != null
+  if (!active) {
     if (aiming) {
       engine.setLook(null, clock, TURN_TIME)
       aiming = false

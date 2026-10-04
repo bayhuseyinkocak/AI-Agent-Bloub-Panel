@@ -41,6 +41,21 @@ export function lookTarget({ nx, ny, tour, pointer, down = 0, nyBoost = 1 }: Aim
   }
 }
 
+/**
+ * Karsiya / kameraya bakış (Attentive–Surprised hattı).
+ * Chat’ten çıkınca yüz ekrana döner: düz bakış, hafif canlılık.
+ * `soft` yan avatarlar için daha yumuşak kilit.
+ */
+export function lookFront(tour: number, soft = false): Look {
+  return {
+    yaw: soft ? 2 : 0,
+    pitch: soft ? 1 : 2,
+    mix: tour * (soft ? 0.72 : 1),
+    spin: SPIN * (1 - tour),
+    wander: soft ? 0.7 : 0.5
+  }
+}
+
 export function tourEase(elapsed: number): number {
   return easings.easeOutQuint(clamp(elapsed / TURN_TIME))
 }

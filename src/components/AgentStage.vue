@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { AGENTS, type AgentDef } from '@/agents'
+import { AGENTS, AGENT_BY_ID, type AgentDef } from '@/agents'
 import { assignSlots, roleOf, type Slot } from '@/layout'
 import { clamp } from '@/bot/math'
 import type { StateId } from '@/bot/states'
+import { COLOR_BY_ID } from '@/bot/skins'
 import BotAvatar from './BotAvatar.vue'
 
 const props = defineProps<{
@@ -33,13 +34,51 @@ function measure() {
 
 /** Summon bounce: her varışta sınıfı çevirip animasyonu yeniden tetikle. */
 const bounceKey = reactive<Record<string, number>>({})
+/** chat’ten yeni çıkan odak: kısa Surprised parıltısı */
+const snapFront = ref(false)
+let snapTimer = 0
+
+watch(
+  () => props.chatEngaged,
+  (on) => {
+    if (on) {
+      snapFront.value = false
+      window.clearTimeout(snapTimer)
+      return
+    }
+    // chat’ten çık → Surprised biraz daha uzun, sonra Attentive (karsiya)
+    snapFront.value = true
+    window.clearTimeout(snapTimer)
+    snapTimer = window.setTimeout(() => {
+      snapFront.value = false
+    }, 1600)
+  }
+)
+
 watch(
   () => `${props.focusId ?? ''}|${props.allyIds.join(',')}|${props.companionIds.join(',')}`,
   () => {
     const arrived = [props.focusId, ...props.allyIds, ...props.companionIds].filter(
       Boolean
     ) as string[]
-    for (const id of arrived) bounceKey[id] = (bounceKey[id] ?? 0) + 1
+    for (const id of arrived) {
+      bounceKey[id] = (bounceKey[id] ?? 0) + 1
+      // summon toz kalkması
+      const slot = slots.value.get(id)
+      const agent = AGENT_BY_ID.get(id)
+      if (slot && agent) {
+        const color = COLOR_BY_ID.get(agent.color)?.hex ?? '#E8EDF7'
+        window.dispatchEvent(
+          new CustomEvent('dust:burst', {
+            detail: {
+              x: (slot.x / 100) * window.innerWidth,
+              y: (slot.y / 100) * window.innerHeight,
+              color
+            }
+          })
+        )
+      }
+    }
   }
 )
 
@@ -94,11 +133,24 @@ function depthBlur(slot: Slot) {
 }
 
 function expressionFor(agent: AgentDef) {
-  // en öne gelen: chat’e yazarken aşağı bakan “effraye” (Scared)
+  // en öne gelen
   if (agent.id === props.focusId) {
-    return props.chatEngaged ? 'effraye' : 'attentif'
+    if (props.chatEngaged) return 'effraye' // chat’e aşağı bakış
+    if (snapFront.value) return 'surpris' // yeni karsiya döndü
+    return 'attentif' // karsiya / kameraya
   }
+  // yanlar: chat’ten çıkınca kısa Surprised, normalde kendi ifadesi
+  if (snapFront.value && !props.chatEngaged) return 'surpris'
   return agent.expression
+}
+
+function gazeModeFor(agent: AgentDef): 'chat' | 'front' | null {
+  // odak: chat’te chat’e, dışarıda kameraya
+  if (agent.id === props.focusId) {
+    return props.chatEngaged ? 'chat' : 'front'
+  }
+  // yanlar: sohbet dışında hafif kamera bakışı
+  return props.chatEngaged ? null : 'front'
 }
 
 function styleFor(agent: AgentDef, slot: Slot) {
@@ -165,10 +217,12 @@ function gazePoint() {
             :expression="expressionFor(agent)"
             :state="stateFor(agent)"
             :paper="'#E8EDF7'"
-            :gaze-active="!!chatEngaged"
+            :gaze-active="!!chatEngaged && agent.id === focusId"
             :gaze-x="gazePoint()?.x ?? null"
             :gaze-y="gazePoint()?.y ?? null"
             :gaze-down="agent.id === focusId && !!chatEngaged"
+            :gaze-mode="gazeModeFor(agent)"
+            :gaze-soft="agent.id !== focusId"
             class="agent__svg"
           />
         </div>
