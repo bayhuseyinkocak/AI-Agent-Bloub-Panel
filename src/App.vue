@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { AGENT_BY_ID, AGENTS, parseCommand, type AgentDef } from '@/agents'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { AGENT_BY_ID, AGENTS, parseCommand } from '@/agents'
+import { createLocalBus, type BusEvent } from '@/bus'
 import type { StateId } from '@/bot/states'
 import AgentStage from '@/components/AgentStage.vue'
 import ChatDock, { type ChatMessage } from '@/components/ChatDock.vue'
@@ -15,6 +16,9 @@ const previewIds = ref<string[] | null>(null)
 const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
+
+const bus = createLocalBus()
+let unsubscribe: (() => void) | null = null
 
 const pendingHint = computed(() => {
   const live = previewIds.value?.length ? previewIds.value[0] : null
@@ -36,14 +40,6 @@ const activeRoster = computed(() => {
   if (!ids.length) return { allies: [] as string[], companions: [] as string[] }
   return resolveRoster(ids[0]!, ids.slice(1))
 })
-
-function pickReply(agent: AgentDef, userText: string) {
-  if (!userText) {
-    return `${agent.name} sahneye geldim. Ne yapmamı istersin?`
-  }
-  const hash = userText.length + agent.id.length
-  return agent.replies[hash % agent.replies.length]!
-}
 
 function flashState(id: string, state: StateId, ms: number) {
   states[id] = state
@@ -91,20 +87,66 @@ function onFloorPointer(e: PointerEvent) {
   chatEngaged.value = false
 }
 
+function onBusEvent(e: BusEvent) {
+  switch (e.type) {
+    case 'user.message':
+      push({ from: 'you', text: e.text })
+      previewIds.value = null
+      break
+
+    case 'agent.called': {
+      const helpers = e.helpers.filter((id) => id !== e.lead)
+      const { companions } = resolveRoster(e.lead, helpers)
+      focusId.value = e.lead
+      allyIds.value = helpers
+      companionIds.value = companions
+
+      flashState(e.lead, AGENT_BY_ID.get(e.lead)?.arriveState ?? 'exclaim', 900)
+      for (const id of helpers) {
+        flashState(id, AGENT_BY_ID.get(id)?.arriveState ?? 'exclaim', 700)
+      }
+      for (const id of companions) flashState(id, 'notify', 500)
+      break
+    }
+
+    case 'agent.thinking':
+      states[e.agentId] = e.state
+      break
+
+    case 'agent.say':
+      push({
+        from: 'agent',
+        agentId: e.agentId,
+        text: e.to ? `→ ${e.to}: ${e.text}` : e.text
+      })
+      break
+
+    case 'agent.done':
+      states[e.agentId] = AGENT_BY_ID.get(e.agentId)?.idleState ?? 'idle'
+      break
+
+    // handoff / pair — Faz 3–4
+    default:
+      break
+  }
+}
+
 function onSend(raw: string) {
   const { ids, text, unknown } = parseCommand(raw)
 
-  push({ from: 'you', text: raw })
-  previewIds.value = null
-
   if (unknown.length) {
+    push({ from: 'you', text: raw })
+    previewIds.value = null
     push({
       from: 'system',
       text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${AGENTS.map((a) => a.id).join(', ')}`
     })
+    return
   }
 
   if (!ids.length) {
+    push({ from: 'you', text: raw })
+    previewIds.value = null
     if (text) {
       push({
         from: 'system',
@@ -114,35 +156,22 @@ function onSend(raw: string) {
     return
   }
 
-  const primaryId = ids[0]!
-  const coIds = ids.slice(1)
-  const { allies, companions } = resolveRoster(primaryId, coIds)
-
-  focusId.value = primaryId
-  allyIds.value = allies
-  companionIds.value = companions
-
-  flashState(primaryId, AGENT_BY_ID.get(primaryId)!.arriveState, 900)
-  for (const id of allies) flashState(id, AGENT_BY_ID.get(id)!.arriveState, 700)
-  for (const id of companions) flashState(id, 'notify', 500)
-
-  const primary = AGENT_BY_ID.get(primaryId)!
-  window.setTimeout(() => {
-    states[primaryId] = primary.thinkState
-    push({ from: 'agent', agentId: primaryId, text: pickReply(primary, text) })
-    window.setTimeout(() => {
-      states[primaryId] = primary.idleState
-    }, 1200)
-  }, 550)
-
-  for (const id of [...allies, ...companions]) {
-    const agent = AGENT_BY_ID.get(id)!
-    window.setTimeout(() => {
-      push({ from: 'agent', agentId: id, text: `${agent.name} yanındayım.` })
-      flashState(id, agent.thinkState, 800)
-    }, 700 + Math.random() * 400)
-  }
+  // tek iş satırı, çok agent — lead/helpers bus’tan gelir
+  bus.dispatch({
+    type: 'user.message',
+    text: text || raw,
+    mentions: ids
+  })
 }
+
+onMounted(() => {
+  unsubscribe = bus.subscribe(onBusEvent)
+})
+
+onUnmounted(() => {
+  unsubscribe?.()
+  unsubscribe = null
+})
 </script>
 
 <template>
