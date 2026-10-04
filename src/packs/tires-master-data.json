@@ -1,0 +1,63 @@
+{
+  "id": "tires-master-data",
+  "name": "Tires Master Data",
+  "transport": "ws",
+  "url": "ws://127.0.0.1:8787/bus",
+  "rules": {
+    "handoff": "any",
+    "pairMode": "side"
+  },
+  "agents": [
+    {
+      "id": "MICHELIN",
+      "name": "MICHELIN",
+      "role": "toplayıcı · michelin_de",
+      "shape": "galet",
+      "color": "bleu",
+      "expression": "attentif",
+      "partners": ["CONTI", "PIRELLI"],
+      "replies": [
+        "model sayfaları ayrıştırılıyor...",
+        "sitemap keşfi tamam, SKU hattı açık.",
+        "EAN birincil anahtar; kayıtlar DB'ye yazılıyor."
+      ],
+      "idleState": "idle",
+      "thinkState": "thinking",
+      "arriveState": "wide"
+    },
+    {
+      "id": "CONTI",
+      "name": "CONTI",
+      "role": "toplayıcı · continental_de",
+      "shape": "hexagone",
+      "color": "orange",
+      "expression": "mefiant",
+      "partners": ["MICHELIN", "PIRELLI"],
+      "replies": [
+        "productsearch yanıtı bekleniyor...",
+        "artNo/CAI ve EPREL alanları ayrıştırılıyor.",
+        "EU etiketi sınıfları kontrol ediliyor."
+      ],
+      "idleState": "idle",
+      "thinkState": "alert",
+      "arriveState": "hexagon"
+    },
+    {
+      "id": "PIRELLI",
+      "name": "PIRELLI",
+      "role": "toplayıcı · pirelli_de",
+      "shape": "goutte",
+      "color": "rouge",
+      "expression": "excite",
+      "partners": ["MICHELIN", "CONTI"],
+      "replies": [
+        "SKU sayfaları taranıyor...",
+        "pkw sitemap → SKU URL'leri; nazik tarama.",
+        "ean_code / lika JSON parse ediliyor."
+      ],
+      "idleState": "idle",
+      "thinkState": "swirl",
+      "arriveState": "burst"
+    }
+  ]
+}

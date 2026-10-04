@@ -1,4 +1,4 @@
-import { DEMO_PACK } from './builtin'
+import { BUILTIN_PACKS, DEMO_PACK } from './builtin'
 import { parseAgentPack } from './load'
 import type { AgentPack } from './types'
 
@@ -30,16 +30,15 @@ function writeCustom(map: Record<string, AgentPack>): void {
 
 /** Küçük liste yüzeyi — ayarlar UI için. */
 export function listPacks(): PackSummary[] {
-  const out: PackSummary[] = [
-    {
-      id: DEMO_PACK.id,
-      name: DEMO_PACK.name,
-      builtin: true,
-      transport: DEMO_PACK.transport
-    }
-  ]
+  const out: PackSummary[] = BUILTIN_PACKS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    builtin: true,
+    transport: p.transport
+  }))
+  const builtinIds = new Set(BUILTIN_PACKS.map((p) => p.id))
   for (const pack of Object.values(readCustom())) {
-    if (pack.id === DEMO_PACK.id) continue
+    if (builtinIds.has(pack.id)) continue
     out.push({
       id: pack.id,
       name: pack.name,
@@ -51,8 +50,10 @@ export function listPacks(): PackSummary[] {
 }
 
 export function getPack(id: string): AgentPack | null {
-  if (id === DEMO_PACK.id) return DEMO_PACK
-  return readCustom()[id] ?? null
+  // kullanıcı override'ı (localStorage) gömülü paketten önce — URL/transport kalıcı olsun
+  const custom = readCustom()[id]
+  if (custom) return custom
+  return BUILTIN_PACKS.find((p) => p.id === id) ?? null
 }
 
 export function getActivePackId(): string {

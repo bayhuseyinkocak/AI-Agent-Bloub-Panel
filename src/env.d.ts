@@ -5,7 +5,11 @@ declare module '*.vue' {
 }
 
 declare module '@/packs/demo-avatars.json' {
-  import type { AgentPack } from '@/pack/types'
-  const pack: AgentPack
+  const pack: unknown
+  export default pack
+}
+
+declare module '@/packs/tires-master-data.json' {
+  const pack: unknown
   export default pack
 }

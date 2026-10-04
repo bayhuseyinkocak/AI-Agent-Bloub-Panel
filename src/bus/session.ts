@@ -12,27 +12,33 @@ import type {
 import type { PackTransport } from '@/pack/types'
 
 const status = ref<BusConnectionStatus>('local')
-const busRef = shallowRef<AgentBus>(createLocalBus())
 /** UI dinleyicileri — transport değişse de kaybolmasın */
 const handlers = new Set<BusHandler>()
+let busRef = shallowRef<AgentBus | null>(null)
 let bridge: Unsubscribe | null = null
 let teardown: (() => void) | null = null
-let current: { transport: PackTransport; url: string | null } = { transport: 'local', url: null }
+let current: { transport: PackTransport; url: string | null } | null = null
 
 function bindBus(bus: AgentBus): void {
   bridge?.()
   busRef.value = bus
+  // kritik: UI handler’ları her zaman bu bridge üzerinden aksın
   bridge = bus.subscribe((event: BusEvent) => {
     for (const handler of [...handlers]) handler(event)
   })
 }
+
+// modül açılışında LocalBus’ı hemen bağla (bridge’siz bus = sessiz UI)
+bindBus(createLocalBus())
+current = { transport: 'local', url: null }
 
 export function useBusStatus() {
   return status
 }
 
 export function getBus(): AgentBus {
-  return busRef.value
+  if (!busRef.value) bindBus(createLocalBus())
+  return busRef.value!
 }
 
 export function subscribeBus(handler: BusHandler): Unsubscribe {
@@ -43,7 +49,7 @@ export function subscribeBus(handler: BusHandler): Unsubscribe {
 }
 
 export function dispatchBus(event: BusEventInput): void {
-  busRef.value.dispatch(event)
+  getBus().dispatch(event)
 }
 
 /** Demo / offline — LocalBus (sahte olaylar). */
@@ -74,8 +80,8 @@ export function useWsTransport(url: string): void {
 }
 
 export function applyTransport(transport: PackTransport, url: string | null): void {
-  // aynı transport → bus’u gereksiz yeniden kurma (dinleyici kaybı / reconnect)
-  if (transport === current.transport && url === current.url) {
+  // aynı transport → yeniden kurma; yine de bridge olduğundan emin ol
+  if (current && transport === current.transport && url === current.url && bridge) {
     if (transport === 'local') status.value = 'local'
     return
   }

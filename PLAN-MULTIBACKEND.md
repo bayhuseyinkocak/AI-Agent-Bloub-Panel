@@ -107,15 +107,21 @@ flowchart TB
 - [x] Rozet: local · demo / ws · bağlı / bağlanıyor / hata
 - [x] Kabul: build geçti; `local` varsayılan; paket `transport: ws` → backendBus
 
-### Faz 5 — Tires paketi + bridge (dışarıda)
-- [ ] Tires yanına WS bridge (DB + `agents_registry.yaml` → BusEvent)
-- [ ] `src/packs/tires-master-data.json`
-- [ ] Kabul: 3 ajan panelde; `report_progress` → `agent.say`
+### Faz 5 — Tires paketi + bridge — **TAMAM**
+- [x] `Tires Master Data/bridge/bus_server.py` — WS `ws://127.0.0.1:8787/bus`
+- [x] scrape_run poll → `agent.say` (report_progress note) / `done`
+- [x] `user.message` → durum özeti (panel süreç başlatmaz)
+- [x] `src/packs/tires-master-data.json` (MICHELIN / CONTI / PIRELLI)
+- [x] Gömülü paket listesine eklendi (`BUILTIN_PACKS`)
+- [x] `websockets` eklendi (pyproject)
+- [x] Kabul: panel build geçti; 3 ajan; bridge `uv run python bridge/bus_server.py`
 
-### Faz 6 — Test
-- [ ] Mock WS e2e
-- [ ] `npm run build` her fazda
-- [ ] `local` smoke: summon / handoff / `!pair`
+### Faz 6 — Test — **TAMAM**
+- [x] Mock WS: `bridge/mock_bus_server.py` (port 8788)
+- [x] E2E: `bridge/smoke_ws_e2e.py` — called/say/done/pair/handoff OK
+- [x] `npm test` — localBus summon / multi+pair / handoff / orbit (5 passed)
+- [x] `scripts/smoke_packs.py` — demo 8 + tires 3 ajan OK
+- [x] `npm run build` geçti
 
 ---
 
@@ -144,8 +150,8 @@ docs yok — plan bu dosyada
 2. ~~Faz 2 — Ayarlar UI~~ **bitti**
 3. ~~Faz 3 — Roster pack’ten~~ **bitti**
 4. ~~Faz 4 — WS backendBus~~ **bitti**
-5. Faz 5 — Tires bridge + pack (aynı iş, iki repo)
-6. Faz 6 — Test / polish
+5. ~~Faz 5 — Tires bridge + pack~~ **bitti**
+6. ~~Faz 6 — Test~~ **bitti**
 
 ---
 

@@ -1,16 +1,15 @@
 import demoRaw from '@/packs/demo-avatars.json'
+import tiresRaw from '@/packs/tires-master-data.json'
 import { parseAgentPack } from './load'
 import type { AgentPack } from './types'
 
-/** Gömülü demo paketi — doğrulanmış; yüklenemezse uygulama çökmez. */
-function loadDemo(): AgentPack {
-  const result = parseAgentPack(demoRaw)
+function loadBuiltin(raw: unknown, fallbackId: string, fallbackName: string): AgentPack {
+  const result = parseAgentPack(raw)
   if (result.ok) return result.pack
-  // JSON statik; hata derleme/CI’da görünür. Yine de yumuşak düş.
-  console.error('[pack] demo-avatars.json hatalı:', result.errors)
+  console.error(`[pack] ${fallbackId} hatalı:`, result.errors)
   return {
-    id: 'demo-avatars',
-    name: 'Demo AI Agent Avatars',
+    id: fallbackId,
+    name: fallbackName,
     transport: 'local',
     url: null,
     rules: { handoff: 'any', pairMode: 'side' },
@@ -18,4 +17,17 @@ function loadDemo(): AgentPack {
   }
 }
 
-export const DEMO_PACK: AgentPack = loadDemo()
+export const DEMO_PACK: AgentPack = loadBuiltin(
+  demoRaw,
+  'demo-avatars',
+  'Demo AI Agent Avatars'
+)
+
+export const TIRES_PACK: AgentPack = loadBuiltin(
+  tiresRaw,
+  'tires-master-data',
+  'Tires Master Data'
+)
+
+/** Gömülü paketler — ayarlarda listede görünür. */
+export const BUILTIN_PACKS: AgentPack[] = [DEMO_PACK, TIRES_PACK]

@@ -7,7 +7,7 @@ export type {
 } from './types'
 export { parseAgentPack, packToAgentDefs } from './load'
 export { agentsToDemoPack } from './fromAgents'
-export { DEMO_PACK } from './builtin'
+export { DEMO_PACK, TIRES_PACK, BUILTIN_PACKS } from './builtin'
 export {
   exportPackText,
   getActivePackId,
