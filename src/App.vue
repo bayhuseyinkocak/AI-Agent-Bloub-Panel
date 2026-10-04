@@ -7,6 +7,7 @@ import type { StateId } from '@/bot/states'
 import AgentStage from '@/components/AgentStage.vue'
 import ChatDock, { type ChatMessage } from '@/components/ChatDock.vue'
 import DustField from '@/components/DustField.vue'
+import SideMenu from '@/components/SideMenu.vue'
 
 const messages = ref<ChatMessage[]>([])
 const focusId = ref<string | null>(null)
@@ -81,6 +82,11 @@ function onPreview(ids: string[]) {
 
 function onEngage(on: boolean) {
   chatEngaged.value = on
+}
+
+/** Sol menüden summon — chat ile aynı yolu kullanır. */
+function onSummon(id: string) {
+  onSend(`/${id}`)
 }
 
 /** Sahne boşluğuna tıkla → chat’ten çık, odak karsiya baksın. */
@@ -223,6 +229,12 @@ onUnmounted(() => {
 <template>
   <div class="floor" @pointerdown="onFloorPointer">
     <DustField />
+    <SideMenu
+      :messages="messages"
+      :focus-id="focusId"
+      :ally-ids="allyIds"
+      @summon="onSummon"
+    />
     <AgentStage
       :focus-id="activeFocus"
       :ally-ids="activeRoster.allies"
