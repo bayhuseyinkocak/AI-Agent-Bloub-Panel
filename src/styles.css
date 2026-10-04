@@ -315,8 +315,7 @@ code {
   align-items: center;
   gap: 6px;
   padding: 14px 0;
-  background: color-mix(in srgb, var(--panel) 55%, transparent);
-  border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--line) 10%, transparent);
   backdrop-filter: blur(10px);
   transition: background 0.16s ease, border-color 0.16s ease;
 }
@@ -324,7 +323,8 @@ code {
 .nav:hover .nav__rail,
 .nav--open .nav__rail {
   background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border-right-color: var(--line);
+  border-right: 1px solid var(--line);
+  
 }
 
 .nav__btn {
