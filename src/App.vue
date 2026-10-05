@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { AGENT_BY_ID, AGENTS, parseCommand } from '@/agents'
-import { createLocalBus, type BusEvent, type PairMode } from '@/bus'
+import { applyTransport, dispatchBus, subscribeBus, type BusEvent, type PairMode } from '@/bus'
+import { applyPackRoster, getAgent, getAgents, parseRosterCommand } from '@/roster'
+import { loadActivePack, type AgentPack } from '@/pack'
 import { setPairMode, togglePairMode } from '@/pairMode'
 import type { StateId } from '@/bot/states'
 import AgentStage from '@/components/AgentStage.vue'
@@ -13,17 +14,18 @@ const messages = ref<ChatMessage[]>([])
 const focusId = ref<string | null>(null)
 const allyIds = ref<string[]>([])
 const companionIds = ref<string[]>([])
-/** yazarken seçilmiş (tam ad) ajanlar; null = boşta */
-const previewIds = ref<string[] | null>(null)
-/** filtre eşleşmesi — soft yaklaşım, lead değil */
-const filterIds = ref<string[]>([])
+/** Tab/Enter/tık ile kesinleşenler — merkezde bekler */
+const selectedIds = ref<string[]>([])
+/** filtre pull 0–1 — yazdıkça ortaya */
+const filterPulls = ref<Record<string, number>>({})
+/** konuşan / işi alan — kadroda ortaya geçer */
+const spotlightId = ref<string | null>(null)
 const chatEngaged = ref(false)
 const states = reactive<Record<string, StateId>>({})
 const seq = ref(0)
 /** aktif pair — side (yan yana) / orbit (bağ + orbit) */
 const pair = ref<{ a: string; b: string; mode: PairMode } | null>(null)
 
-const bus = createLocalBus()
 let unsubscribe: (() => void) | null = null
 
 /** Yapışkan kadro — summon sonrası mention’sız mesajlar buraya gider. */
@@ -33,23 +35,28 @@ function stickyMentions(): string[] {
 }
 
 const pendingHint = computed(() => {
-  const selected = previewIds.value?.length ? previewIds.value : null
+  const sel = selectedIds.value
   const sticky = stickyMentions()
-  const who = selected ?? sticky
+  const who = sel.length ? sel : sticky
+  if (sel.length) return `${sel.join(' + ')} seçildi — mesaj yaz, birden fazla da seçebilirsin`
   if (who.length) return `${who.join(' + ')} — serbest yazabilirsin, / ile değiştir`
   return '/ARI… filtrele, Tab ile seç (ARIA mı ARIS mi?)'
 })
 
 const activeIds = computed(() => {
-  if (previewIds.value?.length) return previewIds.value
+  if (selectedIds.value.length) return selectedIds.value
+  if (Object.keys(filterPulls.value).length) return Object.keys(filterPulls.value)
   if (focusId.value) return [focusId.value, ...allyIds.value]
   return []
 })
 
-const activeFocus = computed(() => activeIds.value[0] ?? null)
+const activeFocus = computed(() => focusId.value)
 
 const activeRoster = computed(() => {
-  const ids = activeIds.value
+  if (selectedIds.value.length || Object.keys(filterPulls.value).length) {
+    return { allies: [] as string[], companions: [] as string[] }
+  }
+  const ids = focusId.value ? [focusId.value, ...allyIds.value] : []
   if (!ids.length) return { allies: [] as string[], companions: [] as string[] }
   return resolveRoster(ids[0]!, ids.slice(1))
 })
@@ -57,14 +64,15 @@ const activeRoster = computed(() => {
 function flashState(id: string, state: StateId, ms: number) {
   states[id] = state
   window.setTimeout(() => {
-    const agent = AGENT_BY_ID.get(id)
+    const agent = getAgent(id)
     if (agent) states[id] = agent.idleState
   }, ms)
 }
 
 function resolveRoster(primaryId: string, coIds: string[]) {
-  const primary = AGENT_BY_ID.get(primaryId)!
+  const primary = getAgent(primaryId)
   const allies = coIds.filter((id) => id !== primaryId)
+  if (!primary) return { allies, companions: [] as string[] }
   const companions = primary.partners.filter(
     (id) => id !== primaryId && !allies.includes(id)
   )
@@ -76,21 +84,17 @@ function push(msg: Omit<ChatMessage, 'id' | 'ts'>) {
 }
 
 function onPreview(ids: string[]) {
-  if (!ids.length) {
-    previewIds.value = null
-    return
-  }
   const next = ids.join(',')
-  const prev = previewIds.value?.join(',') ?? ''
-  previewIds.value = ids
-  // seçim netleşince hafif “fark ettim” — filtre / unique prefix ile değil
-  if (next !== prev && !focusId.value) {
-    flashState(ids[0]!, AGENT_BY_ID.get(ids[0]!)!.arriveState, 500)
+  const prev = selectedIds.value.join(',')
+  selectedIds.value = ids
+  if (next !== prev && ids.length && next.split(',').length > prev.split(',').filter(Boolean).length) {
+    const added = ids.find((id) => !prev.includes(id))
+    if (added) flashState(added, getAgent(added)?.arriveState ?? 'exclaim', 450)
   }
 }
 
-function onFilter(ids: string[]) {
-  filterIds.value = ids
+function onFilter(pulls: Record<string, number>) {
+  filterPulls.value = pulls
 }
 
 function onEngage(on: boolean) {
@@ -100,6 +104,12 @@ function onEngage(on: boolean) {
 /** Sol menüden summon — chat ile aynı yolu kullanır. */
 function onSummon(id: string) {
   onSend(`/${id}`)
+}
+
+/** Paket değişti → roster + transport (Faz 3–4). */
+function onPackChanged(pack: AgentPack) {
+  applyPackRoster(pack)
+  applyTransport(pack.transport, pack.url)
 }
 
 /** Sahne boşluğuna tıkla → chat’ten çık, odak karsiya baksın. */
@@ -113,8 +123,8 @@ function onBusEvent(e: BusEvent) {
   switch (e.type) {
     case 'user.message':
       push({ from: 'you', text: e.text })
-      previewIds.value = null
-      filterIds.value = []
+      selectedIds.value = []
+      filterPulls.value = {}
       break
 
     case 'agent.called': {
@@ -123,20 +133,26 @@ function onBusEvent(e: BusEvent) {
       focusId.value = e.lead
       allyIds.value = helpers
       companionIds.value = companions
+      spotlightId.value = e.lead
 
-      flashState(e.lead, AGENT_BY_ID.get(e.lead)?.arriveState ?? 'exclaim', 900)
-      for (const id of helpers) {
-        flashState(id, AGENT_BY_ID.get(id)?.arriveState ?? 'exclaim', 700)
+      flashState(e.lead, getAgent(e.lead)?.arriveState ?? 'exclaim', 900)
+      // helper’lar sessiz gelsin — kalabalıkta herkes zıplamasın
+      if (!helpers.length) {
+        for (const id of companions) flashState(id, 'notify', 500)
       }
-      for (const id of companions) flashState(id, 'notify', 500)
       break
     }
 
     case 'agent.thinking':
       states[e.agentId] = e.state
+      // sadece gerçekten düşünen öne çıkar (orbit vs. değil)
+      if (e.state === (getAgent(e.agentId)?.thinkState ?? 'thinking')) {
+        spotlightId.value = e.agentId
+      }
       break
 
     case 'agent.say':
+      spotlightId.value = e.agentId
       push({
         from: 'agent',
         agentId: e.agentId,
@@ -145,13 +161,17 @@ function onBusEvent(e: BusEvent) {
       break
 
     case 'agent.done':
-      states[e.agentId] = AGENT_BY_ID.get(e.agentId)?.idleState ?? 'idle'
+      states[e.agentId] = getAgent(e.agentId)?.idleState ?? 'idle'
+      // konuşma bitince lead ortaya döner (varsa)
+      if (spotlightId.value === e.agentId && focusId.value) {
+        spotlightId.value = focusId.value
+      }
       break
 
     case 'agent.pair':
       pair.value = { a: e.a, b: e.b, mode: e.mode }
-      flashState(e.a, AGENT_BY_ID.get(e.a)?.arriveState ?? 'exclaim', 600)
-      flashState(e.b, AGENT_BY_ID.get(e.b)?.arriveState ?? 'exclaim', 600)
+      flashState(e.a, getAgent(e.a)?.arriveState ?? 'exclaim', 600)
+      flashState(e.b, getAgent(e.b)?.arriveState ?? 'exclaim', 600)
       break
 
     case 'agent.unpair':
@@ -163,17 +183,32 @@ function onBusEvent(e: BusEvent) {
     case 'agent.handoff': {
       // sistem satırı: `ARIA → ARIS: …` (isimler örnek — herkes herkese devredebilir)
       push({ from: 'system', text: `${e.from} → ${e.to}: ${e.task}` })
+      spotlightId.value = e.to
       if (focusId.value === e.to) break
       if (!allyIds.value.includes(e.to)) {
         allyIds.value = [...allyIds.value, e.to]
         const { companions } = resolveRoster(focusId.value ?? e.from, allyIds.value)
         companionIds.value = companions
-        flashState(e.to, AGENT_BY_ID.get(e.to)?.arriveState ?? 'exclaim', 700)
+        flashState(e.to, getAgent(e.to)?.arriveState ?? 'exclaim', 700)
       }
       break
     }
 
-    // pair — Faz 4
+    case 'agent.task':
+      push({ from: 'system', text: `görev · ${e.from} → ${e.to}: ${e.goal}` })
+      break
+
+    case 'agent.subspawn':
+      push({ from: 'system', text: `alt ajan ↑ ${e.parent} → ${e.child} (${e.step})` })
+      break
+
+    case 'agent.subdone':
+      push({
+        from: 'system',
+        text: `alt ajan ↓ ${e.child} bitti (${e.step})${e.summary ? ` — ${e.summary}` : ''}`
+      })
+      break
+
     default:
       break
   }
@@ -186,8 +221,8 @@ function onSend(raw: string) {
     const next = pairCmd[1]?.toLowerCase() as PairMode | undefined
     const mode = next ? (setPairMode(next), next) : togglePairMode()
     push({ from: 'you', text: raw })
-    previewIds.value = null
-    filterIds.value = []
+    selectedIds.value = []
+    filterPulls.value = {}
     push({ from: 'system', text: `Pair modu: ${mode}${mode === 'side' ? ' (yan yana)' : ' (orbit + bağ)'}` })
     if (pair.value) {
       pair.value = { ...pair.value, mode }
@@ -199,15 +234,15 @@ function onSend(raw: string) {
     return
   }
 
-  const { ids, text, unknown } = parseCommand(raw)
+  const { ids, text, unknown } = parseRosterCommand(raw)
 
   if (unknown.length) {
     push({ from: 'you', text: raw })
-    previewIds.value = null
-    filterIds.value = []
+    selectedIds.value = []
+    filterPulls.value = {}
     push({
       from: 'system',
-      text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${AGENTS.map((a) => a.id).join(', ')}`
+      text: `Bilinmeyen agent: /${unknown.join(', /')}. Uygun isimler: ${getAgents().map((a) => a.id).join(', ')}`
     })
     return
   }
@@ -216,8 +251,9 @@ function onSend(raw: string) {
     // yapışkan kadro: mention yoksa son summon’daki ajanlara gider
     const sticky = stickyMentions()
     if (sticky.length && text) {
-      previewIds.value = null
-      bus.dispatch({
+      selectedIds.value = []
+      filterPulls.value = {}
+      dispatchBus({
         type: 'user.message',
         text,
         mentions: sticky
@@ -225,8 +261,8 @@ function onSend(raw: string) {
       return
     }
     push({ from: 'you', text: raw })
-    previewIds.value = null
-    filterIds.value = []
+    selectedIds.value = []
+    filterPulls.value = {}
     push({
       from: 'system',
       text: sticky.length
@@ -237,9 +273,9 @@ function onSend(raw: string) {
   }
 
   // tek iş satırı, çok agent — lead/helpers bus’tan gelir
-  previewIds.value = null
-  filterIds.value = []
-  bus.dispatch({
+  selectedIds.value = []
+  filterPulls.value = {}
+  dispatchBus({
     type: 'user.message',
     text: text || raw,
     mentions: ids
@@ -247,7 +283,10 @@ function onSend(raw: string) {
 }
 
 onMounted(() => {
-  unsubscribe = bus.subscribe(onBusEvent)
+  const pack = loadActivePack()
+  applyPackRoster(pack)
+  applyTransport(pack.transport, pack.url)
+  unsubscribe = subscribeBus(onBusEvent)
 })
 
 onUnmounted(() => {
@@ -264,6 +303,7 @@ onUnmounted(() => {
       :focus-id="focusId"
       :ally-ids="allyIds"
       @summon="onSummon"
+      @pack-changed="onPackChanged"
     />
     <AgentStage
       :focus-id="activeFocus"
@@ -272,7 +312,9 @@ onUnmounted(() => {
       :pair="pair"
       :states="states"
       :chat-engaged="chatEngaged"
-      :filter-ids="filterIds"
+      :selected-ids="selectedIds"
+      :filter-pulls="filterPulls"
+      :spotlight-id="spotlightId"
     />
     <ChatDock
       :messages="messages"

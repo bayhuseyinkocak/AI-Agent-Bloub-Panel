@@ -120,8 +120,20 @@ code {
   transition: width 0.85s cubic-bezier(0.22, 1, 0.36, 1), height 0.85s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.agent--soft .agent__blob {
-  transition: width 1.8s cubic-bezier(0.22, 1, 0.36, 1), height 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+.agent--soft .agent__blob,
+.agent--wait .agent__blob {
+  transition: width 1s cubic-bezier(0.22, 1, 0.36, 1), height 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* kesin seçim — merkezde bekleme */
+.agent--wait .agent__glow {
+  opacity: 0.95;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.45), transparent 70%);
+}
+
+.agent--wait .agent__name {
+  color: var(--accent);
+  font-size: 13px;
 }
 
 .agent__pop {
@@ -710,6 +722,107 @@ code {
   border: 1px solid var(--line);
   padding: 8px 12px;
   border-radius: 12px 12px 12px 4px;
+}
+
+/* ---------- pack settings (SideMenu → Ayarlar) ---------- */
+
+.pack-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.pack-panel__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pack-panel__select,
+.pack-panel__json {
+  font: inherit;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--void) 70%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.pack-panel__json {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 180px;
+}
+
+.pack-panel__errors {
+  margin: 0;
+  padding-left: 16px;
+  color: #ff8e8e;
+  font-size: 12px;
+}
+
+.pack-panel__note {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.pack-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pack-panel__btn {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pack-panel__btn--ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.pack-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.pack-badge--local {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+.pack-badge--open {
+  color: #5ddea0;
+  border-color: color-mix(in srgb, #5ddea0 40%, var(--line));
+}
+
+.pack-badge--connecting {
+  color: #e0c35d;
+  border-color: color-mix(in srgb, #e0c35d 40%, var(--line));
+}
+
+.pack-badge--error {
+  color: #ff8e8e;
+  border-color: color-mix(in srgb, #ff8e8e 40%, var(--line));
 }
 
 .chat__suggest {

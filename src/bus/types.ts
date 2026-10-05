@@ -12,8 +12,22 @@ export type BusEventInput =
   | { type: 'agent.pair'; a: AgentId; b: AgentId; mode: PairMode }
   | { type: 'agent.unpair'; a: AgentId; b: AgentId }
   | { type: 'agent.done'; agentId: AgentId }
+  /** görev verme — konuşma / orkestrasyon */
+  | { type: 'agent.task'; from: AgentId; to: AgentId; goal: string }
+  /** alt ajan (şimdilik transcript; ileride ayrı avatar) */
+  | { type: 'agent.subspawn'; parent: AgentId; child: AgentId; step: string }
+  | {
+      type: 'agent.subdone'
+      parent: AgentId
+      child: AgentId
+      step: string
+      summary?: string
+    }
 
 export type PairMode = 'side' | 'orbit'
+
+/** Transport bağlantı durumu — ayarlarda rozet. */
+export type BusConnectionStatus = 'local' | 'connecting' | 'open' | 'closed' | 'error'
 
 export type BusEvent = BusEventInput & { ts: number }
 

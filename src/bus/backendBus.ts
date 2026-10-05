@@ -1,27 +1,41 @@
-import { isBusEvent, type AgentBus, type BusEvent, type BusEventInput, type BusHandler, type Unsubscribe } from './types'
+import {
+  isBusEvent,
+  type AgentBus,
+  type BusConnectionStatus,
+  type BusEvent,
+  type BusEventInput,
+  type BusHandler,
+  type Unsubscribe
+} from './types'
 
 export interface BackendBusOptions {
-  /** WS / SSE uç noktası — gerçek API bağlanınca buradan geçecek */
-  url?: string
-  /** şimdilik: dispatch yutulur mu (true) yoksa lokal yankı mı (false) */
-  silent?: boolean
+  url: string
+  onStatus?: (status: BusConnectionStatus) => void
+  /** dispatch kapalıyken de inbound dinle (reconnect testi) */
+  echoLocal?: boolean
 }
 
 /**
- * Gerçek backend için iskelet. Bugün no-op / mock;
- * yarın WS veya SSE aynı `BusEvent` tiplerini basacak.
- *
- * UI farkı görmez: yine yalnızca `subscribe` / `dispatch`.
+ * WS adapter — UI yalnız `subscribe` / `dispatch` görür.
+ * Gelen mesajlar `BusEvent` JSON’u olmalı; diğerleri sessizce düşer.
  */
-export function createBackendBus(options: BackendBusOptions = {}): AgentBus & {
+export function createBackendBus(options: BackendBusOptions): AgentBus & {
   connect(): void
   disconnect(): void
   readonly url: string
+  readonly status: BusConnectionStatus
 } {
-  const url = options.url ?? 'ws://127.0.0.1:8787/bus'
-  const silent = options.silent ?? true
+  const url = options.url
+  const echoLocal = options.echoLocal ?? false
   const handlers = new Set<BusHandler>()
-  // let socket: WebSocket | null = null   // bağlanınca açılacak
+  let socket: WebSocket | null = null
+  let status: BusConnectionStatus = 'closed'
+  let shouldRun = false
+
+  function setStatus(next: BusConnectionStatus): void {
+    status = next
+    options.onStatus?.(next)
+  }
 
   function deliver(event: BusEvent): void {
     for (const handler of [...handlers]) handler(event)
@@ -32,8 +46,50 @@ export function createBackendBus(options: BackendBusOptions = {}): AgentBus & {
     deliver(raw)
   }
 
+  function parseMessage(data: string): unknown {
+    try {
+      return JSON.parse(data)
+    } catch {
+      return null
+    }
+  }
+
+  function openSocket(): void {
+    if (typeof WebSocket === 'undefined') {
+      setStatus('error')
+      return
+    }
+    try {
+      socket = new WebSocket(url)
+    } catch {
+      setStatus('error')
+      return
+    }
+    setStatus('connecting')
+
+    socket.onopen = () => setStatus('open')
+    socket.onclose = () => {
+      setStatus('closed')
+      socket = null
+      if (shouldRun) {
+        // yumuşak yeniden bağlanma
+        window.setTimeout(() => {
+          if (shouldRun) openSocket()
+        }, 1500)
+      }
+    }
+    socket.onerror = () => setStatus('error')
+    socket.onmessage = (e: MessageEvent) => {
+      handleInbound(parseMessage(String(e.data)))
+    }
+  }
+
   return {
     url,
+
+    get status() {
+      return status
+    },
 
     subscribe(handler: BusHandler): Unsubscribe {
       handlers.add(handler)
@@ -43,20 +99,26 @@ export function createBackendBus(options: BackendBusOptions = {}): AgentBus & {
     },
 
     dispatch(event: BusEventInput): void {
-      // TODO: socket.send(JSON.stringify(event))
-      if (silent) return
-      // geçici yankı — UI bağlıyken test için
-      deliver({ ...event, ts: Date.now() } as BusEvent)
+      const packet: BusEvent = { ...event, ts: Date.now() }
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(packet))
+      }
+      if (echoLocal) deliver(packet)
     },
 
     connect() {
-      // TODO: socket = new WebSocket(url)
-      // socket.onmessage = (e) => handleInbound(JSON.parse(e.data))
-      void handleInbound
+      shouldRun = true
+      if (!socket) openSocket()
     },
 
     disconnect() {
-      // TODO: socket?.close(); socket = null
+      shouldRun = false
+      if (socket) {
+        socket.onclose = null
+        socket.close()
+        socket = null
+      }
+      setStatus('closed')
     }
   }
 }

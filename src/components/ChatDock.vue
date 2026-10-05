@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { AGENTS, AGENT_BY_ID } from '@/agents'
+import { useRoster } from '@/roster'
 
 export interface ChatMessage {
   id: number
@@ -17,10 +17,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [text: string]
-  /** kesin seçilmiş ajanlar (Tab/Enter/tık) — lead adayı */
+  /** hazır kadro — tam `/ID` (yazım veya Tab) — bekleme yuvasında durur */
   preview: [ids: string[]]
-  /** filtre eşleşmesi — sahnede yavaş soft yaklaşım, lead değil */
-  filter: [ids: string[]]
+  /** filtre pull 0–1 — önek tutanlar yazdıkça ortaya */
+  filter: [pulls: Record<string, number>]
   /** input odağı — avatarlar chat’e baksın */
   engage: [on: boolean]
 }>()
@@ -28,40 +28,95 @@ const emit = defineEmits<{
 const draft = ref('')
 const listEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const { agents: rosterAgents, byId: rosterById } = useRoster()
 const highlight = ref(0)
 /** sadece Tab / Enter / tık ile eklenir — yazmak çağırmaz */
 const selectedIds = ref<string[]>([])
 
-/** Taslakta tam `/ID` token’ı var mı (bitişik yazmak seçmez, sadece filtre dışlar). */
+/**
+ * Taslaktaki tüm mention’lar.
+ * - held: boşlukla kapanmış (ya da metinle birlikte kalmış) tam `/ID` — yerini korur
+ * - typing: imleçteki son `/yazım` — kademeli pull + filtre listesi
+ *
+ * `/ARIA` → typing=ARIA (hazır). `/ARIA ` → held=[ARIA].
+ * `/ARIA /NO` → held=[ARIA], typing=NO. `/ARIA mesaj` → held=[ARIA].
+ */
+function parseDraftMentions(raw: string): { held: string[]; typing: string | null } {
+  const held: string[] = []
+  let typing: string | null = null
+  if (!raw) return { held, typing }
+  const hasTrailingSpace = /\s$/.test(raw)
+  const parts = raw.split(/\s+/)
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!
+    if (!part.startsWith('/')) continue
+    const key = part.slice(1).toUpperCase()
+    const stillTyping = i === parts.length - 1 && !hasTrailingSpace
+    if (stillTyping) {
+      typing = key
+    } else if (key && rosterById.value.has(key)) {
+      if (!held.includes(key)) held.push(key)
+    }
+  }
+  return { held, typing }
+}
+
+/** Taslakta tam `/ID` token’ı var mı (Tab seçiminin hâlâ yaşayıp yaşamadığı). */
 function hasToken(raw: string, id: string): boolean {
   return new RegExp(`(?:^|\\s)\\/${id}(?=\\s|$)`, 'i').test(raw)
 }
 
-/** Kesin seçim ∩ taslakta hâlâ duran mention. */
-function liveSelected(): string[] {
-  return selectedIds.value.filter((id) => hasToken(draft.value, id))
+/**
+ * Sahne için “hazır” kadro = tam ad (kapanmış mention veya bitişik yazım)
+ * + Tab seçimi ∩ taslak. Sıra taslakta görünme sırası — slot kaymasın.
+ */
+function readyIds(): string[] {
+  const { held, typing } = parseDraftMentions(draft.value)
+  const out: string[] = [...held]
+  if (typing && rosterById.value.has(typing) && !out.includes(typing)) out.push(typing)
+  for (const id of selectedIds.value) {
+    if (hasToken(draft.value, id) && !out.includes(id)) out.push(id)
+  }
+  return out
 }
 
-/** Son `/partial` — filtre listesi + soft eşleşmeler. */
-const filterQuery = computed(() => {
-  const m = draft.value.match(/\/([a-zA-Z]*)$/)
-  return m ? (m[1] ?? '').toUpperCase() : null
-})
+/** Son `/partial` — filtre listesi + kademeli pull. Kapalıysa null. */
+const filterQuery = computed(() => parseDraftMentions(draft.value).typing)
 
 const suggestions = computed(() => {
   const q = filterQuery.value
   if (q === null) return []
-  const taken = new Set(liveSelected())
-  return AGENTS.filter((a) => a.id.startsWith(q) && !taken.has(a.id)).slice(0, 8)
+  const taken = new Set(selectedIds.value.filter((id) => hasToken(draft.value, id)))
+  return rosterAgents.value.filter((a) => a.id.startsWith(q) && !taken.has(a.id)).slice(0, 8)
 })
+
+/**
+ * Pull = ne kadar özgül eşleşme. `/A` → 0.3, `/AR` → 0.45.
+ * Tam ad zaten ready slot’una geçer; pull yalnızca önek tutanlar içindir.
+ */
+function computePulls(query: string | null, ready: string[]): Record<string, number> {
+  const pulls: Record<string, number> = {}
+  if (!query || query.length < 1) return pulls
+  if (rosterById.value.has(query)) return pulls
+  for (const a of rosterAgents.value) {
+    if (ready.includes(a.id)) continue
+    if (!a.id.startsWith(query)) continue
+    const specific = query.length / a.id.length
+    pulls[a.id] = Math.min(0.92, 0.18 + specific * 0.55)
+  }
+  return pulls
+}
 
 watch(suggestions, () => {
   highlight.value = 0
 })
 
 function emitState() {
-  emit('preview', liveSelected())
-  emit('filter', suggestions.value.map((s) => s.id))
+  // seçili ama taslaktan silinmiş olanları düşür
+  selectedIds.value = selectedIds.value.filter((id) => hasToken(draft.value, id))
+  const ready = readyIds()
+  emit('preview', ready)
+  emit('filter', computePulls(filterQuery.value, ready))
 }
 
 watch(draft, () => {
@@ -72,7 +127,7 @@ function onInput(e: Event) {
   draft.value = (e.target as HTMLInputElement).value
 }
 
-/** Seçim: Tab / Enter / listeden tık. Yazarak tamamlamak çağırmaz. */
+/** Seçim: Tab / Enter / listeden tık → bekleme yuvası. */
 function applySuggestion(id: string) {
   draft.value = draft.value.replace(/\/[a-zA-Z]*$/, `/${id} `)
   if (!selectedIds.value.includes(id)) selectedIds.value.push(id)
@@ -87,11 +142,19 @@ function submit() {
   draft.value = ''
   selectedIds.value = []
   emit('preview', [])
-  emit('filter', [])
+  emit('filter', {})
 }
 
 function onKeydown(e: KeyboardEvent) {
   const list = suggestions.value
+
+  if (e.key === 'Escape' && filterQuery.value !== null) {
+    e.preventDefault()
+    draft.value = draft.value.replace(/\/[a-zA-Z]*$/, '')
+    emitState()
+    return
+  }
+
   if (!list.length) return
 
   if (e.key === 'ArrowDown') {
@@ -104,15 +167,22 @@ function onKeydown(e: KeyboardEvent) {
     highlight.value = (highlight.value - 1 + list.length) % list.length
     return
   }
-  if (e.key === 'Tab' || e.key === 'Enter') {
+  if (e.key === 'Tab') {
     e.preventDefault()
     applySuggestion((list[highlight.value] ?? list[0]!).id)
     return
   }
-  if (e.key === 'Escape') {
+  if (e.key === 'Enter') {
     e.preventDefault()
-    draft.value = draft.value.replace(/\/[a-zA-Z]*$/, '')
-    emitState()
+    const q = filterQuery.value
+    // tam ad veya mesaj varsa GÖNDER; yalnızca yarım `/ön` ise seç
+    const exact = q !== null && rosterById.value.has(q)
+    const hasMessage = /\S/.test(draft.value.replace(/\/[a-zA-Z0-9_-]+/g, '').trim())
+    if (!exact && !hasMessage) {
+      applySuggestion((list[highlight.value] ?? list[0]!).id)
+      return
+    }
+    submit()
   }
 }
 

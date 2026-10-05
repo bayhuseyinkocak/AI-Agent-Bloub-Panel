@@ -1,4 +1,5 @@
-import { AGENTS, AGENT_BY_ID, parseCommand } from '@/agents'
+import { parseCommand } from '@/agents'
+import { getAgent, getAgentMap, getAgents } from '@/roster'
 import { getPairMode } from '@/pairMode'
 import type { StateId } from '@/bot/states'
 import type {
@@ -39,19 +40,19 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
   }
 
   function thinkState(agentId: AgentId): StateId {
-    return AGENT_BY_ID.get(agentId)?.thinkState ?? 'thinking'
+    return getAgent(agentId)?.thinkState ?? 'thinking'
   }
 
   function idleState(agentId: AgentId): StateId {
-    return AGENT_BY_ID.get(agentId)?.idleState ?? 'idle'
+    return getAgent(agentId)?.idleState ?? 'idle'
   }
 
   function arriveState(agentId: AgentId): StateId {
-    return AGENT_BY_ID.get(agentId)?.arriveState ?? 'exclaim'
+    return getAgent(agentId)?.arriveState ?? 'exclaim'
   }
 
   function pickReply(agentId: AgentId, userText: string): string {
-    const agent = AGENT_BY_ID.get(agentId)
+    const agent = getAgent(agentId)
     if (!agent) return `${agentId} sahnede.`
     if (!userText) return `${agent.name} sahneye geldim. Ne yapmamı istersin?`
     const hash = userText.length + agent.id.length
@@ -71,9 +72,9 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     const explicit = userText.match(/(?:devret|devrediyorum|handoff|@|→)\s*\/?([A-Za-z]{2,})/i)
     if (explicit) {
       const id = explicit[1]!.toUpperCase()
-      if (AGENT_BY_ID.has(id) && id !== speaker) return id
+      if (getAgent(id) && id !== speaker) return id
     }
-    for (const agent of AGENTS) {
+    for (const agent of getAgents()) {
       if (agent.id === speaker) continue
       if (new RegExp(`\\b${agent.id}\\b`, 'i').test(sayText)) return agent.id
     }
@@ -123,8 +124,8 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     }
     emit({ type: 'agent.called', lead, helpers })
 
-    // lead + ilk helper → pair (side / orbit; değişkenle geçiş)
-    const partner = helpers[0]
+    // yalnızca tam 2 ajan → pair; 3+ kadro V formasyonu kullanır
+    const partner = helpers.length === 1 ? helpers[0] : null
     if (partner) {
       const mode = getPairMode()
       later(420, () => {
@@ -137,11 +138,13 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
       })
     }
 
-    runTurn(lead, text, text, 200, false)
-
-    helpers.forEach((id, i) => {
-      runTurn(id, text, text, 700 + i * 180, false)
-    })
+    // sırayla konuş — 4 ajan aynı anda sallanmasın, sadece cevap veren hareket eder
+    const queue = [lead, ...helpers]
+    let delay = 200
+    for (const id of queue) {
+      runTurn(id, text, text, delay, false)
+      delay += 850
+    }
   }
 
   return {
@@ -155,7 +158,9 @@ export function createLocalBus(options: LocalBusOptions = {}): AgentBus {
     dispatch(event: BusEventInput): void {
       if (mock && event.type === 'user.message') {
         const mentions =
-          event.mentions.length > 0 ? event.mentions : (parseCommand(event.text).ids as AgentId[])
+          event.mentions.length > 0
+            ? event.mentions
+            : (parseCommand(event.text, getAgentMap()).ids as AgentId[])
         const packet = { ...event, mentions }
         emit(packet)
         simulate(packet)
