@@ -194,7 +194,21 @@ function onBusEvent(e: BusEvent) {
       break
     }
 
-    // pair — Faz 4
+    case 'agent.task':
+      push({ from: 'system', text: `görev · ${e.from} → ${e.to}: ${e.goal}` })
+      break
+
+    case 'agent.subspawn':
+      push({ from: 'system', text: `alt ajan ↑ ${e.parent} → ${e.child} (${e.step})` })
+      break
+
+    case 'agent.subdone':
+      push({
+        from: 'system',
+        text: `alt ajan ↓ ${e.child} bitti (${e.step})${e.summary ? ` — ${e.summary}` : ''}`
+      })
+      break
+
     default:
       break
   }

@@ -102,6 +102,8 @@ export function parseAgentPack(input: unknown): PackParseResult {
         partners &&
         replies
       ) {
+        const llmIn = isRecord(raw.llm) ? raw.llm : undefined
+        const persona = typeof raw.persona === 'string' ? raw.persona : undefined
         agents.push({
           id: agentId,
           name: aName,
@@ -113,13 +115,25 @@ export function parseAgentPack(input: unknown): PackParseResult {
           replies,
           idleState: idleState as AgentPack['agents'][number]['idleState'],
           thinkState: thinkState as AgentPack['agents'][number]['thinkState'],
-          arriveState: arriveState as AgentPack['agents'][number]['arriveState']
+          arriveState: arriveState as AgentPack['agents'][number]['arriveState'],
+          ...(persona ? { persona } : {}),
+          ...(llmIn
+            ? {
+                llm: {
+                  baseUrl: typeof llmIn.baseUrl === 'string' ? llmIn.baseUrl : undefined,
+                  model: typeof llmIn.model === 'string' ? llmIn.model : undefined,
+                  apiKeyEnv: typeof llmIn.apiKeyEnv === 'string' ? llmIn.apiKeyEnv : undefined
+                }
+              }
+            : {})
         })
       }
     })
   }
 
   if (errors.length) return { ok: false, errors }
+
+  const packLlmIn = isRecord(input.llm) ? input.llm : undefined
 
   return {
     ok: true,
@@ -129,7 +143,17 @@ export function parseAgentPack(input: unknown): PackParseResult {
       transport: transport!,
       url,
       rules,
-      agents
+      agents,
+      ...(packLlmIn
+        ? {
+            llm: {
+              baseUrl: typeof packLlmIn.baseUrl === 'string' ? packLlmIn.baseUrl : undefined,
+              model: typeof packLlmIn.model === 'string' ? packLlmIn.model : undefined,
+              apiKeyEnv:
+                typeof packLlmIn.apiKeyEnv === 'string' ? packLlmIn.apiKeyEnv : undefined
+            }
+          }
+        : {})
     }
   }
 }

@@ -5,6 +5,14 @@ import type { PairMode } from '@/bus'
 
 export type PackTransport = 'local' | 'ws'
 
+/** OpenAI-uyumlu LLM. Yoksa bridge merkezi LLM’e düşer. */
+export interface PackLlm {
+  baseUrl?: string
+  model?: string
+  /** env adı — API anahtarı pack’te durmaz */
+  apiKeyEnv?: string
+}
+
 export interface PackRules {
   /** `any` = herkes herkese handoff (isimler bağlayıcı değil) */
   handoff: 'any' | 'none'
@@ -23,6 +31,10 @@ export interface PackAgent {
   idleState: StateId
   thinkState: StateId
   arriveState: StateId
+  /** ajan bazlı LLM; boşsa merkezi */
+  llm?: PackLlm
+  /** konuşma personası (sistem promptu özeti) */
+  persona?: string
 }
 
 /**
@@ -37,6 +49,8 @@ export interface AgentPack {
   url: string | null
   rules: PackRules
   agents: PackAgent[]
+  /** paket seviyesi / merkezi LLM fallback */
+  llm?: PackLlm
 }
 
 export type PackParseResult =

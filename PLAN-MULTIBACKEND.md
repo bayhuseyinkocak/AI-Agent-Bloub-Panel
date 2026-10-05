@@ -125,6 +125,26 @@ flowchart TB
 
 ---
 
+## K1 — Konuşan ajanlar (2026-10)
+
+Kararlar:
+1. Ajana özel LLM (`pack.agents[].llm` / registry `llm`) → yoksa **merkezi** (`pack.llm` / `_llm`)
+2. Alt ajan = şimdilik **transcript** (`PIRELLI.KESIF`); ileride ayrı avatar
+3. `start_run` **yok** (K2)
+
+| Parça | Yer |
+|-------|-----|
+| `agent.task` / `agent.subspawn` / `agent.subdone` | `src/bus/types.ts` + App transcript |
+| Pack `llm` + `persona` | `src/pack/types.ts`, `load.ts`, tires pack |
+| `bridge/llm.py` | OpenAI-uyumlu; anahtar yoksa fallback |
+| `bridge/agent_runtime.py` | persona + status/count araçları + alt ajan |
+| `bridge/bus_server.py` | `user.message` → `AgentRuntime` |
+| `bridge/test_agent_runtime.py` | smoke |
+
+**K2 (dokunulmadı):** `start_run` aracı + `agent.task` ile tarama başlatma.
+
+---
+
 ## Dosya haritası (hedef)
 
 ```

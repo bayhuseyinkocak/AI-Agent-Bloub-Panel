@@ -103,4 +103,14 @@ describe('localBus smoke', () => {
     expect(text).toBe('merhaba')
     expect(getAgents().length).toBe(8)
   })
+
+  it('bus task/subspawn/subdone geçer', () => {
+    const bus = createLocalBus()
+    const log = collect()
+    bus.subscribe((e) => log.events.push(e))
+    bus.dispatch({ type: 'agent.task', from: 'ARIA', to: 'ARIS', goal: 'analiz' })
+    bus.dispatch({ type: 'agent.subspawn', parent: 'ARIS', child: 'ARIS.KESIF', step: 'keşif' })
+    bus.dispatch({ type: 'agent.subdone', parent: 'ARIS', child: 'ARIS.KESIF', step: 'keşif', summary: 'ok' })
+    expect(log.types()).toEqual(['agent.task', 'agent.subspawn', 'agent.subdone'])
+  })
 })

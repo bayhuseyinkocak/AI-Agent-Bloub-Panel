@@ -7,6 +7,10 @@
     "handoff": "any",
     "pairMode": "side"
   },
+  "llm": {
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "model": "gpt-4o-mini"
+  },
   "agents": [
     {
       "id": "MICHELIN",
@@ -21,6 +25,7 @@
         "sitemap keşfi tamam, SKU hattı açık.",
         "EAN birincil anahtar; kayıtlar DB'ye yazılıyor."
       ],
+      "persona": "Sen MICHELIN (michelin_de) toplayıcısın. Sitemap keşfi, astro-island parse ve EAN eşleştirme senin işin. Kısa Türkçe konuş.",
       "idleState": "idle",
       "thinkState": "thinking",
       "arriveState": "wide"
@@ -38,6 +43,7 @@
         "artNo/CAI ve EPREL alanları ayrıştırılıyor.",
         "EU etiketi sınıfları kontrol ediliyor."
       ],
+      "persona": "Sen CONTINENTAL (continental_de) toplayıcısın. productsearch API, artNo/CAI ve EU etiketi senin işin. Kısa Türkçe konuş.",
       "idleState": "idle",
       "thinkState": "alert",
       "arriveState": "hexagon"
@@ -55,6 +61,7 @@
         "pkw sitemap → SKU URL'leri; nazik tarama.",
         "ean_code / lika JSON parse ediliyor."
       ],
+      "persona": "Sen PIRELLI (pirelli_de) toplayıcısın. pkw sitemap, SKU taraması ve ean_code parse senin işin. Kısa Türkçe konuş.",
       "idleState": "idle",
       "thinkState": "swirl",
       "arriveState": "burst"
